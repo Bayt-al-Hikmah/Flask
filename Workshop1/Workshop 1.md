@@ -65,33 +65,28 @@ Now, with our environment active, we can install Flask using `pip`, Python's pac
 pip install Flask
 ```
 #### Creating the "Hello, World!" App
-Let's write our first Flask app. Create a file named `app.py` and add the following code:
+Now that Flask is installed, let’s build our very first application. This simple example will demonstrate the basic structure of a Flask app and show how we can serve a response from the server to a web browser.  
+The first step is to create a new file in your project directory called **`app.py`**. This file will contain the main logic of our application. Open it in your code editor and add the following code:
 ```
-# 1. Import the Flask class
 from flask import Flask
 
-# 2. Create an instance of the Flask class
-# __name__ tells Flask where to look for resources
 app = Flask(__name__)
 
-# 3. Define a route using the @app.route() decorator
-# This tells Flask that the home_page() function should be called
-# when someone visits the root URL ('/')
 @app.route('/')
 def home_page():
     return "Hello, World!"
 
-# This block allows us to run the app directly from the script
 if __name__ == '__main__':
-    # The debug=True argument enables debug mode, which provides helpful error messages
-    # and automatically reloads the server when we make changes.
     app.run(debug=True)
+
 ```
-To run our app, we execute this file from the terminal:
+Here’s what each part of the code does. First, we import the `Flask` class from the `flask` package. This class is the foundation of our web application. Next, we create an instance of this class and store it in a variable named `app`. The argument `__name__` tells Flask where to look for resources like templates and static files, which becomes important in larger projects.  
+After creating the app, we define a route using the `@app.route('/')` decorator. A **route** is the path that the user visits in their browser. In this case, the root path `/` corresponds to the homepage. When someone goes to this URL, Flask runs the function `home_page()` and returns its result in this case, the string `"Hello, World!"`.  
+Finally, the block at the bottom ensures that the server only runs if we execute this file directly. The `debug=True` option is especially useful during development: it enables automatic reloading whenever we make changes to the code and provides detailed error messages if something goes wrong.  
+Once the file is saved, open your terminal, navigate to the project directory, and run the application with the command:
 ```
 python app.py
 ```
-
 Our terminal will show an output indicating the server is running, usually at `http://127.0.0.1:5000/`. If we open this URL in our web browser, we will see the text "Hello, World!". We've just created our first web server!
 ### Working with Parameters and Arguments
 Static pages are great, but most applications need to handle dynamic data. Flask makes it easy to capture information directly from the URL.
