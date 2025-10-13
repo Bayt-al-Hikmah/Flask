@@ -1,0 +1,10 @@
+{% block content %}
+    <h1>My To-Do List</h1>
+    <ul>
+        {% for task in tasks %}
+            <li>{{ task }}</li>
+        {% else %}
+            <li>You have no tasks. Great job!</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

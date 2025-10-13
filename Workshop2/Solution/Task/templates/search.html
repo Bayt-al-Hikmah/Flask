@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<main>
+    <form class="search_form" method="POST" action="{{url_for('search.search')}}">
+        {{ form.hidden_tag() }}
+        {{ form.author.label }}
+        {{ form.author(size=30) }}
+        {% for error in form.author.errors %}
+            <span style="color:red;">{{ error }}</span>
+        {% endfor %}
+        {{ form.submit() }}
+    </form>
+
+    <div class="quotes-container">
+        {% for quote in Quotes %}
+            <div class="quote">
+                <div class="quote-text"><p>"{{quote.quote }}"</p></div>
+                <div class="author">- {{quote.author }}</div>
+            </div>
+        {% else %}
+            <div class="result">No quotes available. Be the first to <a href="{{url_for('share.share')}}">share a quote</a>!</div>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}

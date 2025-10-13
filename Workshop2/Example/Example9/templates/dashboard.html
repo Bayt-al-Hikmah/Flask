@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <div class="welcome-message">
+        {% if user_status == 'admin' %}
+            <h1>Welcome, Administrator!</h1>
+            <p>You have full access to the system controls.</p>
+        {% elif user_status == 'member' %}
+            <h1>Welcome, Valued Member!</h1>
+            <p>Thank you for being a part of our community.</p>
+        {% else %}
+            <h1>Welcome, Guest!</h1>
+            <p>Please sign up or log in to access member features.</p>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -580,45 +580,14 @@ Hooks are what make Flask so extensible. They allow us to:
 - Process requests before they reach routes (e.g., checking user permissions).
 - Reuse code across the entire app.
 
-
-As we move to form handling, we'll see how libraries like Flask-WTF use these concepts to provide powerful features seamlessly.
 ## Handling HTML Forms
 Forms are how users send data to our server. We’ll explore handling forms manually and then with the powerful **Flask-WTF** library for validation.
 
 ### The Basic Python Way
-
-We'll create a contact form and process its data using Flask's `request` object.
-
-First, create a route for the contact form: **`app.py`:**
-```
-from flask import request, render_template
-
-# This route handles both displaying the form (GET) and processing it (POST)
-@app.route('/contact', methods=['GET', 'POST'])
-def contact():
-    submitted_name = None
-    if request.method == 'POST':
-        # Access form data using request.form
-        name = request.form.get('name')
-        message = request.form.get('message')
-        print(f'Received message from {name}: {message}')
-        submitted_name = name
-
-    return render_template('contact.html', submitted_name=submitted_name)
-```
-
-This single route handles two scenarios:
-
-1. If the request method is **GET**, it simply displays the form.
-    
-2. If the request method is **POST**, it reads the `name` and `message` from `request.form`, prints them, and then re-renders the template with a confirmation message.
-    
-
-**`templates/contact.html`:**
-
-HTML
-
-```
+We'll create a contact form and process its data using Flask's `request` object.  
+First we create the ``contact.html`` template  
+**`templates/contact.html`**
+```html
 {% extends "layout.html" %}
 {% block content %}
 <h1>Contact Us</h1>
@@ -635,24 +604,51 @@ HTML
 {% endif %}
 {% endblock %}
 ```
+Now we create new Blueprint that handel submitted contact form  
+**``routes/contact.py``**
+```python
+from flask import Blueprint, render_template, request
 
+contact_bp = Blueprint('contact', __name__)
+
+@contact_bp.route('/contact', methods=['GET', 'POST'])
+def contact():
+    submitted_name = None
+    if request.method == 'POST':
+        name = request.form.get('name')
+        message = request.form.get('message')
+        print(f'Received message from {name}: {message}')
+        submitted_name = name
+
+    return render_template('contact.html', submitted_name=submitted_name)
+```
+Here, we first add a new import `request` from Flask. This allows us to access data sent by the user through forms.    
+In our route definition, we specify the `methods` parameter as `['GET', 'POST']`, meaning this route can handle both **GET** requests (when the user simply opens the page) and **POST** requests (when the user submits the form).  
+Inside the function, we check if the request method is `'POST'`. If it is, that means the user has submitted the form. We then retrieve the values of `name` and `message` from the form using `request.form.get()`, print them in the console, and store the submitted name in the variable `submitted_name`.  
+Finally, we render the `contact.html` template, passing `submitted_name` to it so we can display it back to the user.    
+If the user just opens the page (a **GET** request), the `if` block will be skipped, and the page will simply load the form without any submitted data.  
 ### The Flask-WTF Way
+Handling forms manually with `request.form` works for simple cases, but as your application grows, it quickly becomes repetitive and error-prone. You have to manually check whether fields are empty, validate input formats, and implement security measures like CSRF protection yourself.  
+To make this process easier and safer, Flask provides an extension called **Flask-WTF**, which integrates seamlessly with the **WTForms** library. WTForms is a flexible Python library for building and validating web forms. Flask-WTF acts as a bridge between Flask and WTForms, giving you a clean and powerful way to handle form input.  
+Flask-WTF offers several advantages:  
+- **CSRF Protection** Automatically includes a hidden security token in every form to prevent Cross-Site Request Forgery attacks.
+- **Built-in Validation** Allows you to define validation rules directly in your form classes (e.g., required fields, email format, maximum length).
+- **Cleaner Code** – Separates form logic (Python code) from form presentation (HTML templates), keeping your project organized.
+- **Reusable Forms**  Define a form once in Python and reuse it across multiple templates or routes.
 
-Manual handling is fine for simple forms, but for validation and security, **Flask-WTF** and **WTForms** are the standard. They simplify form creation, validation, and CSRF protection.
 
-First, install the libraries:
-
-Bash
-
+To install Flask-WTF, run the following command:
+```shell
+pip install Flask-WTF email-validator
 ```
-pip install Flask-WTF
+We Also install another pachage that will help us to verify that the email input provided in a form is valid. It ensures the entered text follows a proper email format (like user@example.com).  
+```shell
+pip install email-validator
 ```
+With Flask-WTF, each form is represented as a Python class that inherits from `FlaskForm`. Each field is an object with its own label, validation rules, and HTML rendering behavior, we define a form class in a new `forms.py` file.   
 
-Next, define a form class in a new `forms.py` file. **`forms.py`:**
-
-Python
-
-```
+**`utils/forms.py`:**
+```python
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, Length, Email
@@ -665,161 +661,130 @@ class ContactForm(FlaskForm):
 ```
 
 This class defines our form fields and attaches **validators** to them, which automatically check the input data.
+- `StringField` creates a single-line text input field.
+- `TextAreaField` creates a multi-line text box for longer messages.
+- `SubmitField` generates the submit button.
+- `DataRequired()` ensures that the field is not left empty.
+- `Email()` validates that the input is in a proper email format.
+- `Length(min=3, max=25)` ensures the input has at least 3 characters and no more than 25 characters.
 
-Now, let's update our route to use this form. **`app.py`:**
+Now, we edit the t Blueprint that handel submitted contact form 
+```python
+from utils.forms import ContactForm
+from flask import Blueprint,redirect,render_template,url_for
 
-Python
-
+contact_bp = Blueprint('contact', __name__)
+@contact_bp.route('/contact', methods=['GET', 'POST'])
+def contact():
+    submitted_name = None
+    form = ContactForm()
+    if form.validate_on_submit():
+        name = form.name.data
+        message = form.message.data
+        print(f'Received from {name}: {message}')
+        submitted_name = name
+        return render_template('contact.html', form=form,submitted_name = submitted_name)
+    return render_template('contact.html', form=form,submitted_name = submitted_name)
 ```
-# ... other imports
-from forms import ContactForm
-from flask import flash
+We update our **Blueprint** to handle the submitted contact form. We start by importing the `ContactForm` class and creating a form instance inside the route. The route accepts both `GET` and `POST` requests: when accessed through a **GET** request, it simply renders the contact form, and when accessed through a **POST** request, it processes the submitted data.   
+The `form.validate_on_submit()` method is a powerful shortcut provided by **Flask-WTF** it automatically checks whether the current request is a POST and then runs all the validators we defined in our `ContactForm` class, such as `DataRequired`, `Email`, and `Length`. If all validations pass, it returns `True`.   
+Inside the `if` block, we access the submitted data using `form.field_name.data` (for example, `form.name.data` and `form.message.data`), print it for verification, and then redirect the user back to the `/contact` page. If the request is a **GET** or if validation fails, the route renders the `contact.html` template again, passing the form object so that the template can display errors or repopulate the input fields as needed.  
+#### CSRF Protection
+A CSRF (Cross-Site Request Forgery) attack is a type of web security vulnerability where a malicious website tricks a user’s browser into performing an unwanted action on another website where the user is already authenticated for example, submitting a form or changing account details without their consent. This happens because browsers automatically include session cookies with every request, even if it’s triggered by a third-party site.
 
-# You need a secret key for CSRF protection
+To protect against this, **Flask-WTF** automatically includes a hidden **CSRF token** in every form. This token is a unique, random value generated for each session and verified on every POST request. If a request doesn’t include a valid token, Flask will reject it effectively blocking any cross-site request forgery attempts.  
+
+To configure it we add `app.config['SECRET_KEY'] = 'a-very-secret-key'` to our ``app.py``. The `SECRET_KEY` is used internally by Flask and Flask-WTF to sign and validate CSRF tokens, ensuring that only requests originating from the legitimate form on our website are accepted. In a real-world application, this key should be a long, randomly generated string and never hard-coded in your source code. Instead, it should be stored securely, such as in an environment variable or a configuration file that’s not shared publicly.
+**`app.py`**
+```python
+from flask import Flask
+from routes import main,profile,tasks,dashboard,contact
+
+app = Flask(__name__)
 app.config['SECRET_KEY'] = 'a-very-secret-key'
 
-@app.route('/contact-validated', methods=['GET', 'POST'])
-def contact_validated():
-    form = ContactForm()
-    # This checks if the form was submitted and is valid
-    if form.validate_on_submit():
-        name = form.name.data
-        message = form.message.data
-        print(f'Received from {name}: {message}')
-        flash(f'Thanks for your message, {name}!', 'success')
-        return redirect(url_for('contact_validated')) # Redirect to prevent re-submission
-    
-    return render_template('contact_validated.html', form=form)
+# Register the blueprints
+
+app.register_blueprint(main.main_bp)
+app.register_blueprint(profile.profile_bp)
+app.register_blueprint(tasks.tasks_bp)
+app.register_blueprint(dashboard.dashboard_bp)
+app.register_blueprint(contact.contact_bp)
+
+if __name__ == '__main__':
+    app.run(debug=True, port=3000)
 ```
-
-The `form.validate_on_submit()` method is a powerful shortcut. It checks if the request is a POST and then runs all the validators we defined. If everything is valid, it returns `True`.
-
-**`templates/contact_validated.html`:**
-
-HTML
-
-```
+Finally we edit the contact template   
+**`templates/contact.html`:**
+```html
 {% extends "layout.html" %}
 {% block content %}
-<h1>Contact Us (Validated)</h1>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-      <div class="alert-{{ category }}">{{ message }}</div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
-
+<h1>Contact Us</h1>
 <form method="POST" action="">
-    {{ form.hidden_tag() }} <div>
-        {{ form.name.label }}<br>
-        {{ form.name(size=30) }}
-        {% for error in form.name.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </div>
-    
-    <div>
-        {{ form.email.label }}<br>
-        {{ form.email(size=30) }}
-        {% for error in form.email.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </div>
-
-    <div>
-        {{ form.message.label }}<br>
-        {{ form.message(rows=5, cols=32) }}
-        {% for error in form.message.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </div>
-
-    <div>{{ form.submit() }}</div>
+    {{ form.hidden_tag() }}
+        {{ form.name.label }}
+        {{ form.name(size=30) }}
+        <br>
+        {% for error in form.name.errors %}
+        <div>
+            <span style="color: red;">{{ error }}</span>
+        </div>
+        {% endfor %}
+        {{ form.email.label }}
+        {{ form.email(size=30) }}
+        <br>
+        {% for error in form.email.errors %}
+        <div>
+            <span style="color: red;">{{ error }}</span>
+            </div>
+        {% endfor %}
+        {{ form.message.label }}<br>
+        {{ form.message(rows=5, cols=32) }}
+        <br>
+        {% for error in form.message.errors %}
+        <div>
+            <span style="color: red;">{{ error }}</span>
+        </div>
+        {% endfor %}
+    {{ form.submit() }}
+    {% if submitted_name %}
+        <h2>Thanks for your message, {{ submitted_name }}!</h2>
+    {% endif %}
 </form>
 {% endblock %}
 ```
+Inside the `<form>`, `{{ form.hidden_tag() }}` automatically includes the hidden **CSRF token** for security. Each field (name, email, and message) is displayed with its label and input element, followed by an error loop that shows validation messages in red if the user submits invalid data.
 
-This template renders the form fields and any validation errors automatically.
-
-### Adding CSRF Protection
-
-**Cross-Site Request Forgery (CSRF)** is an attack where a malicious site tricks a user's browser into performing unwanted actions on a site where they are logged in.
-
-The good news? **Flask-WTF provides CSRF protection automatically!** ✨
-
-To enable it, you only need to do two things:
-
-1. **Set a `SECRET_KEY`** in your app's configuration: `app.config['SECRET_KEY'] = 'your-secret-string'`. This key is used to generate secure tokens.
-    
-2. **Add `{{ form.hidden_tag() }}`** inside your `<form>` tag in the template. This renders a hidden input containing the unique CSRF token.
-    
-
-When the user submits the form, `form.validate_on_submit()` automatically checks this token. If it's missing or invalid, validation fails, and the request is blocked. It's security made simple!
-
----
-
+Finally, `{{ form.submit() }}` creates the submit button, and if the form was successfully submitted, a thank-you message appears using the `submitted_name` variable.
 ## Task
-
-In this project, you will build a **Quote Sharing Web Application** using Flask and Jinja2.
-
+In this project, you will build a **Quote Sharing Web Application** using Flask and Jinja2.  
 The application will allow users to:
-
 - Submit quotes anonymously by providing the author’s name and the quote text.
-    
 - Browse all submitted quotes in a styled interface.
-    
 - Search for quotes by a specific author.
-    
 - Use reusable layouts and static assets for a consistent design.
-    
-
 ### Functional Requirements
-
 #### Homepage (`/`)
-
 - Displays a welcome message.
-    
 - Shows a list of all submitted quotes dynamically from a Python list or dictionary.
-    
 - Uses a Jinja2 `for` loop to render the quotes.
-    
 
 #### Quote Submission (`/share`)
-
 - Provides a form (using `Flask-WTF`) with two fields:
-    
     - Author name (`StringField`).
-        
     - Quote text (`TextAreaField`).
-        
 - Validates input:
-    
     - Author name must be at least 3 characters.
-        
     - Quote must not exceed 300 characters.
-        
 - Displays validation error messages next to the fields.
-    
 - Includes automatic CSRF protection.
-    
 - On successful submission, adds the quote to the list and redirects back to the homepage.
-    
 
 #### Search Quotes (`/search`)
-
 - Provides a simple form to enter an author’s name.
-    
 - On submission, displays all quotes from that author.
-    
 - If no quotes are found, shows a message: “No quotes found for this author.”
-    
-
 #### Layouts and Partials
-
 - Create a `layout.html` with a header, footer, and a `{% block content %}` section.
-    
 - Create a `_navbar.html` partial and use `{% include '_navbar.html' %}` in your layout. The navbar should link to Home, Share Quote, and Search.
-    
 - Ensure all pages extend the main layout.

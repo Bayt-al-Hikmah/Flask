@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Contact Us</h1>
+
+<form method="POST" action="">
+    {{ form.hidden_tag() }} 
+        {{ form.name.label }}
+        {{ form.name(size=30) }}
+        <br>
+        {% for error in form.name.errors %}
+        <div>
+            <span style="color: red;">{{ error }}</span>
+        </div>
+        {% endfor %}
+    
+    
+    
+        {{ form.email.label }}
+        {{ form.email(size=30) }}
+        <br>
+        {% for error in form.email.errors %}
+        <div>
+            <span style="color: red;">{{ error }}</span>
+
+            </div>
+        {% endfor %}
+    
+
+    
+        {{ form.message.label }}<br>
+        {{ form.message(rows=5, cols=32) }}
+        <br>
+        {% for error in form.message.errors %}
+        <div>
+            <span style="color: red;">{{ error }}</span>
+        </div>
+        {% endfor %}
+    
+
+    {{ form.submit() }}
+    {% if submitted_name %}
+	    <h2>Thanks for your message, {{ submitted_name }}!</h2>
+	{% endif %}
+</form>
+{% endblock %}

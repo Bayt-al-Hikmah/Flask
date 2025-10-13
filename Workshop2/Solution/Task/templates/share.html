@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<main>
+    <form class ="share_form" method="POST" action="{{url_for('share.share')}}">
+        <h1>Share Quote</h1>
+        {{ form.hidden_tag() }}
+        {{ form.author.label }}
+        {{ form.author(size=30) }}
+        {% for error in form.author.errors %}
+            <span style="color:red;">{{ error }}</span>
+        {% endfor %}
+
+        {{ form.quote.label }}
+        {{ form.quote(class="textarea") }}
+        {% for error in form.quote.errors %}
+            <span style="color:red;">{{ error }}</span>
+        {% endfor %}
+        {{ form.submit() }}
+    </form>
+</main>
+{% endblock %}
