@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1 class="page-title">Log in</h1>
+
+<form method="POST" action="{{ url_for('auth.login') }}" class="form-card">
+    {{ form.hidden_tag() }}
+
+    {{ form.username.label }}
+    {{ form.username(id='username', required=True) }}
+    {% for error in form.username.errors %}
+        <span style="color:red;">{{ error }}</span><br>
+    {% endfor %}
+
+    {{ form.password.label }}
+    {{ form.password(id='password', required=True) }}
+    {% for error in form.password.errors %}
+        <span style="color:red;">{{ error }}</span><br>
+    {% endfor %}
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-success">Login</button>
+        <a href="{{ url_for('auth.register') }}" class="btn btn-link">Create account</a>
+    </div>
+</form>
+{% endblock %}

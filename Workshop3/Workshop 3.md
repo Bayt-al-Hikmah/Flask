@@ -3,6 +3,7 @@
 - Build a simple wiki app where users can create and view pages.
 - Handle **rich text** input safely using Markdown.
 - Allow users to **upload files** and manage them securely.
+- Handling Server Errors and None Found Pages
 - Explore the evolution of CSS: from component classes to **utility-first frameworks**.
 
 ## User Authentication
@@ -773,82 +774,303 @@ if __name__ == '__main__':
 ```
 We configure and initialize our app to use **CKEditor** by adding ``ckeditor = CKEditor(app)`` This line links CKEditor with our Flask application, enabling rich text editing for any `CKEditorField` in our forms. It automatically loads the necessary scripts and styles, allowing users to create and edit content using a user-friendly WYSIWYG editor.
 ## File Uploads
+Allowing users to upload files, such as profile pictures or attachments, is a common feature in modern web apps. However, it introduces significant **security risks**, including the possibility of uploading malicious files or overloading the server.
 
-Allowing users to upload files, like a profile avatar, requires careful handling to ensure security. We'll use Werkzeug (a library Flask is built on) to securely process filenames.
-
-First, create an `uploads` folder in your project directory.
-
-**Add an upload route to `routes/auth.py`:**
-
-Python
-
-```python
-import os
-from werkzeug.utils import secure_filename
-# ... other imports
-
-@auth_bp.route('/profile', methods=['GET', 'POST'])
-@login_required # Use the decorator from wiki.py or define it here
-def profile():
-    if request.method == 'POST':
-        # Check if a file was uploaded
-        if 'avatar' not in request.files:
-            flash('No file part', 'warning')
-            return redirect(request.url)
-        file = request.files['avatar']
-        if file.filename == '':
-            flash('No selected file', 'warning')
-            return redirect(request.url)
-        
-        if file:
-            # Secure the filename to prevent directory traversal attacks
-            filename = secure_filename(file.filename)
-            upload_path = os.path.join(current_app.root_path, 'static/uploads', filename)
-            file.save(upload_path)
-            
-            # Update user's avatar path in our "database"
-            username = session['user']['username']
-            current_app.users[username]['avatar'] = filename
-            flash('Avatar updated!', 'success')
-            return redirect(url_for('auth.profile'))
-
-    return render_template('profile.html')
+In Flask, we’ll use the **Werkzeug** utilities and **Flask-WTF** for form handling. We’ll ensure only **authenticated users** can upload, **sanitize filenames**, **validate file types**, and **store files safely** outside the main application directory.  
+**Installing Packages**
+```shell
+pip install python-magic
+pip install python-magic-bin
 ```
+**`python-magic`** is a Python library that identifies a file’s true type by reading its **binary signature**, known as _magic bytes_, instead of trusting the file’s extension or user input. This makes it a powerful security tool for verifying uploaded files  for example, detecting whether an uploaded `.jpg` is actually an image or a disguised executable.
+### Creating The Upload Form
+First, we’ll create a new upload form inside our `utils/forms.py` file:  
+**``utils/forms.py``**
+```python
+from wtforms import StringField, PasswordField, validators,FileField
+from flask_wtf import FlaskForm
+from flask_ckeditor import CKEditorField
+  
+class RegistrationForm(FlaskForm):
+    username = StringField('Username', [validators.Length(min=3, max=25)])
+    password = PasswordField('Password', [validators.DataRequired(), validators.Length(min=6)])
 
-**Create `templates/profile.html`:**
+class LoginForm(FlaskForm):
+    username = StringField('Username', [validators.DataRequired()])
+    password = PasswordField('Password', [validators.DataRequired()])
+  
+class PageForm(FlaskForm):
+    title = StringField("Title", validators=[validators.DataRequired()])
+    content = CKEditorField("Content", validators=[validators.DataRequired()])
+    
+class UploadForm(FlaskForm):
+    avatar = FileField('Upload Avatar', validators=[validators.DataRequired()])
+```
+In our `UploadForm` class, we define an **`avatar`** field using `FileField`. This creates a file input field that requires the user to select a file before submitting the form.
+### Creating Helper Function
+We’ll add a function to our `utils/funcs.py` file that helps us verify whether the uploaded file has an allowed extension.   
+**`utils/funcs.py`**
+```python
+from functools import wraps
+from flask import redirect, url_for, session, flash
 
-HTML
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash('You must be logged in to access this page.', 'danger')
+            return redirect(url_for('auth.login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
+def allowed_file(filename,  ALLOWED_EXTENSIONS):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+```
+### Creating the Profile Route
+Now we’ll create a new route blueprint that handles displaying the user profile and uploading profile picture.  
+**`routes/profile.py`:**
+```python
+import uuid
+import magic
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, abort
+from werkzeug.utils import secure_filename
+from utils.forms import UploadForm
+from utils.funcs import login_required, allowed_file
+from pathlib import Path
+
+profile_bp = Blueprint('profile', __name__)
+
+UPLOAD_DIR = Path('./uploads/avatars')
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Allowed extensions and MIME types
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
+
+@profile_bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = UploadForm()
+    username = session['user']
+    user = current_app.users.get(username, {})
+    avatar_path = user.get('avatar', None)
+    if request.method == 'POST' and form.validate_on_submit():
+        file = request.files.get('avatar')
+        if not file or file.filename == '':
+            flash('No file selected.', 'danger')
+            return redirect(url_for('profile.profile'))
+        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
+            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
+            return redirect(url_for('profile.profile'))
+        mime_type = magic.from_buffer(file.read(1024), mime=True)
+        file.seek(0)
+        if mime_type not in ALLOWED_MIME_TYPES:
+            flash('Invalid file content.', 'danger')
+            return redirect(url_for('profile.profile'))
+        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+        file_path = UPLOAD_DIR / filename
+        file.save(file_path)
+        user['avatar'] = filename
+        current_app.users[username] = user
+        flash('Avatar uploaded successfully!', 'success')
+        return redirect(url_for('profile.profile'))
+    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
+```
+**GET /profile**  
+When the user visits the `/profile` page in their browser:
+1. **Authentication check (`@login_required`)**
+    - The `login_required` decorator ensures that only logged-in users can access the profile page.
+    - If a user is not authenticated, they are redirected to the login page.
+2. **User data retrieval**
+    - The app retrieves the currently logged-in username from the session (`session['user']`).
+    - It then loads that user’s record from `current_app.users`, a simulated in-memory storage (like a database).
+    - If the user has previously uploaded an avatar, its filename is fetched and stored in `avatar_path`.
+3. **Form rendering**
+    - A new instance of `UploadForm` (containing a `FileField` named `avatar`) is created.
+    - The `profile.html` template is rendered, showing the upload form and the user’s current avatar if one exists.
+
+**POST /profile**  
+When the form is submitted (i.e., when the user uploads a new file):
+1. **Form validation**
+    - The route first checks if the form is valid using `form.validate_on_submit()`.
+    - Then it ensures that the uploaded file actually exists (`if not file or file.filename == ''`).
+2. **Extension validation (`allowed_file`)**
+    - The `allowed_file()` function from `utils/funcs.py` checks whether the file’s extension (like `.png` or `.jpg`) is in the allowed set (`ALLOWED_EXTENSIONS`).
+    - This prevents users from uploading disallowed file types such as `.exe`, `.php`, or `.js`.
+3. **MIME type verification with `python-magic`**
+    - The first 1024 bytes of the file are read and analyzed by `python-magic` to determine the true MIME type.
+    - The `file.seek(0)` command resets the file’s pointer so it can be saved later.
+    - This prevents malicious uploads where attackers rename harmful files (e.g., `malware.exe` → `cat.png`) to bypass extension checks.
+    - Only files whose MIME type matches one of `image/png`, `image/jpeg`, or `image/gif` are accepted.
+4. **Filename sanitization and uniqueness**
+    - The `secure_filename()` function from Werkzeug ensures that the filename contains only safe characters (no `../` or system paths).
+    - A **UUID (Universally Unique Identifier)** is prepended to the filename to avoid collisions between users uploading files with the same name.`filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"`, it generated random id to add to the file name when we store it
+5. **File storage**
+    - The file is saved to a secure directory (`/uploads`) using: `file.save(file_path)`
+    - This directory is created (if it doesn’t exist) with `UPLOAD_DIR.mkdir(parents=True, exist_ok=True)`.
+    - The upload directory is kept outside the main app’s static or templates folder to prevent direct web access to uploaded files.
+6. **User data update**
+    - The filename of the uploaded image is stored in the user’s record (`user['avatar']`).
+    - The in-memory user data (`current_app.users`) is updated accordingly.
+7. **Feedback and redirect**
+    - A success message is flashed to the user:`flash('Avatar uploaded successfully!', 'success')`
+    - The user is then redirected back to the `/profile` page to see their updated avatar.
+### Serving Uploaded Files Safely
+To serve uploaded files securely, we’ll add another route inside `routes/profile.py`:
+```python
+import uuid
+import magic
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, send_from_directory 
+from werkzeug.utils import secure_filename
+from utils.forms import UploadForm
+from utils.funcs import login_required, allowed_file
+from pathlib import Path
+
+profile_bp = Blueprint('profile', __name__)
+
+UPLOAD_DIR = Path('./uploads/avatars')
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Allowed extensions and MIME types
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
+
+@profile_bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = UploadForm()
+    username = session['user']
+    user = current_app.users.get(username, {})
+    avatar_path = user.get('avatar', None)
+    if request.method == 'POST' and form.validate_on_submit():
+        file = request.files.get('avatar')
+        if not file or file.filename == '':
+            flash('No file selected.', 'danger')
+            return redirect(url_for('profile.profile'))
+        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
+            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
+            return redirect(url_for('profile.profile'))
+        mime_type = magic.from_buffer(file.read(1024), mime=True)
+        file.seek(0)
+        if mime_type not in ALLOWED_MIME_TYPES:
+            flash('Invalid file content.', 'danger')
+            return redirect(url_for('profile.profile'))
+        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+        file_path = UPLOAD_DIR / filename
+        file.save(file_path)
+        user['avatar'] = filename
+        current_app.users[username] = user
+        flash('Avatar uploaded successfully!', 'success')
+        return redirect(url_for('profile.profile'))
+    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
+
+@profile_bp.route('/avatars/<filename>')
+@login_required
+def get_avatar(filename):
+    return send_from_directory(UPLOAD_DIR, filename)
+```
+This new route `/avatars/<filename>` is responsible for **serving user-uploaded avatar images**. When a user’s profile page requests an image, Flask uses `send_from_directory()` to securely retrieve the file from the `UPLOAD_DIR`.  
+The `@login_required` decorator ensures that only authenticated users can access uploaded avatars, preventing unauthorized access to user files.
+### Template for Profile Page
+Finally, we’ll create the profile page template.    
+**`templates/profile.html`:**
 ```html
-{% include 'partials/_navbar.html' %}
-<h1 class="page-title">Your Profile</h1>
-
-<div class="card">
-    <h2>Update Avatar</h2>
-    {% set user = current_app.users[session.user] %}
+{% extends "layout.html" %}
+{% block content %}
+<h1>Welcome, {{ session['user'] }}</h1>
+<div class="avatar-section">
     {% if user.avatar %}
-        <img src="{{ url_for('static', filename='uploads/' + user.avatar) }}" alt="User Avatar" class="avatar">
+        <img src="{{ url_for('profile.get_avatar', filename=user.avatar) }}" alt="User Avatar" class="avatar">
+    {% else %}
+        <p>No avatar uploaded yet.</p>
     {% endif %}
-
-    <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="avatar" accept="image/*">
-        <button type="submit" class="btn btn-primary">Upload</button>
-    </form>
 </div>
 
-{% include 'partials/_footer.html' %}
+<form method="POST" enctype="multipart/form-data" action="{{ url_for('profile.profile') }}">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.avatar.label }}
+        {{ form.avatar() }}
+    </div>
+    <div class="form-group">
+        <button type="submit" class="btn btn-success">Upload</button>
+    </div>
+</form>
+{% endblock %}
 ```
+he form uses `enctype="multipart/form-data"` to enable file uploads. We also show the avatar (if available) using a route that will serve the image securely.
+### Registering the Profile Blueprint
+Finally, register the new route in the main application by importing the `profile` blueprint and adding the following line to your Flask app setup:  
+**``app.py``**
+```python
+app.register_blueprint(profile.profile_bp)
+```
+## Handling Errors
+Even the best-designed applications encounter errors such as users visiting non-existing pages or unexpected internal issues, By default, Flask returns simple, plain-text error responses (like “404 Not Found” or “500 Internal Server Error”), which are functional but not very user-friendly, To maintain a consistent user experience, we can **override Flask’s default error pages** with our own **custom templates** that match our site’s design and guide users back to safety.
+### Creating the Error Blueprint
+We’ll create a new file called **`routes/errors.py`**, where we define two custom error pages one for **404 (Not Found)** and one for **500 (Internal Server Error)**.
+**``routes/errors.py``**
+```python
+from flask import Blueprint, render_template, request, session
 
-Key points for file uploads:
+errors_bp = Blueprint('errors', __name__)
 
-1. **`enctype="multipart/form-data"`**: This is required on the HTML `<form>` tag to allow file uploads.
-    
-2. **`request.files`**: Uploaded files are accessed in Flask via the `request.files` dictionary.
-    
-3. **`secure_filename()`**: This is a **critical security step**. It sanitizes the filename to prevent malicious paths (like `../../../../etc/passwd`), which could lead to directory traversal attacks.
-    
-4. **Saving the File**: The file is saved to a designated `static/uploads` directory. In a production app, you would likely use a cloud storage service like Amazon S3.
+@errors_bp.app_errorhandler(404)
+def not_found_error(e):
+    username = session.get('user', None)
+    return render_template(
+        '404.html',
+        title='Page Not Found',
+        username=username,
+        message="The page you’re looking for doesn’t exist.",
+        url=request.path
+    ), 404
 
+
+@errors_bp.app_errorhandler(500)
+def internal_error(e):
+    username = session.get('user', None)
+    return render_template(
+        '500.html',
+        title='Server Error',
+        username=username,
+        message="Something went wrong on our end. Please try again later."
+    ), 500
+```
+Here we create  `errors_bp` Blueprint to handle application-wide errors in a clean, modular way. The `@errors_bp.app_errorhandler(404)` decorator catches all “Page Not Found” errors and renders a custom `404.html` template, displaying a user-friendly message along with the requested URL.   
+Similarly, the `@errors_bp.app_errorhandler(500)` function handles unexpected server errors, showing a `500.html` template with a helpful message instead of a raw error page.   
+Both functions retrieve the logged-in username from the session (if available) to personalize the error page and return the appropriate HTTP status code (404 or 500). This makes the app’s error handling consistent, user-friendly, and well-integrated across all routes.
+
+### Create the Templates
+Let’s now create two templates one for **404 errors** and one for **500 errors** that provide a consistent, branded look for your app.  
+**``templates/404.html``**
+```html
+{% extends "layout.html" %}
+{% block content %}
+<div class="container text-center mt-5">
+  <h1>404 - Page Not Found</h1>
+  <p>Sorry, the page "{{ url }}" doesn’t exist.</p>
+  <a href="{{ url_for('main.index') }}" class="btn btn-primary mt-3">Go Back Home</a>
+</div>
+{% endblock %}
+```
+**``templates/500.html``**
+```html
+{% extends "layout.html" %}
+{% block content %}
+<div class="container text-center mt-5">
+  <h1>500 - Internal Server Error</h1>
+  <p>{{ message }}</p>
+  <a href="{{ url_for('main.index') }}" class="btn btn-secondary mt-3">Return to Home</a>
+</div>
+{% endblock %}
+```
+### Registering the Errors Blueprint
+Finally, register the new route in the main application by importing the `errros` blueprint and adding the following line to our Flask app setup:   
+**``app.py``**
+```python
+app.register_blueprint(errors.errors_bp)
+```
 ## A Journey Through CSS Styling
 ### Act I: The Specific Approach (Class-per-Element)
 When we first begin styling our web pages, the natural instinct is to give each element its own class and style it directly. For example:  
