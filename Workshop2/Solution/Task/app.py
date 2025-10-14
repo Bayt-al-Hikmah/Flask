@@ -5,7 +5,7 @@ from routes import main,share,search
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'fXZAdJtkLu5zK7A1sbXsQutiO4TD3M74QXqsT0fcRjiGGvihe9Hb379oLwahxJjc'
 
-app.config['Quotes'] = []
+app.Quotes = []
 # Register the blueprint with the main app
 app.register_blueprint(main.main_bp)
 app.register_blueprint(share.share_bp)

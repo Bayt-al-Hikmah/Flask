@@ -9,6 +9,6 @@ def search():
     form = SearchForm()
     if form.validate_on_submit():
         author = form.author.data
-        Quotes = [quote for quote in app.config['Quotes'] if quote['author'] == author]
+        Quotes = [quote for quote in app.Quotes if quote['author'] == author]
         return render_template('search.html', form=form, Quotes=Quotes)
     return render_template('search.html', form=form, Quotes=Quotes)

@@ -4,5 +4,5 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def index():
-    Quotes = app.config['Quotes']
+    Quotes = app.Quotes
     return render_template('index.html', Quotes=Quotes)

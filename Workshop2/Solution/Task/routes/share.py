@@ -9,6 +9,6 @@ def share():
     if form.validate_on_submit():
         author = form.author.data
         quote = form.quote.data
-        app.config['Quotes'].append({"quote": quote, "author": author})
+        app.Quotes.append({"quote": quote, "author": author})
         return redirect(url_for('main.index'))
     return render_template('share.html', form=form)
