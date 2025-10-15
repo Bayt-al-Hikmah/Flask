@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Welcome, {{ session['user'] }}</h1>
+<div class="avatar-section">
+    {% if user.avatar %}
+        <img src="{{ url_for('profile.get_avatar', filename=user.avatar) }}" alt="User Avatar" class="avatar">
+    {% else %}
+        <p>No avatar uploaded yet.</p>
+    {% endif %}
+</div>
+
+<form method="POST" enctype="multipart/form-data" action="{{ url_for('profile.profile') }}">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.avatar.label }}
+        {{ form.avatar() }}
+    </div>
+    <div class="form-group">
+        <button type="submit" class="btn btn-success">Upload</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>{{ page_name }}</h1>
+<p><em>By: {{ page.author.username }}</em></p>
+<hr>
+<div>
+    {{ page.content | safe }}
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+from functools import wraps
+from flask import redirect, url_for, session, flash
+import sqlite3
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash('You must be logged in to access this page.', 'danger')
+            return redirect(url_for('auth.login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def allowed_file(filename,  ALLOWED_EXTENSIONS):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def with_db(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        db = sqlite3.connect("./database.db")
+        db.row_factory = sqlite3.Row 
+        try:
+            return f(db, *args, **kwargs)
+        finally:
+            db.close()
+    return decorated_function
