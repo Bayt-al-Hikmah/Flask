@@ -429,13 +429,18 @@ if __name__ == '__main__':
 ```
 Now, when you visit `http://127.0.0.1:5000/`, Flask will serve the HTML file, and the rest of the application interaction will happen via JavaScript calling our API endpoints.
 #### The HTML and CSS
-We will create a simple interface with two main sections: a Login section and a Dashboard section. Initially, the dashboard will be hidden, We can find the template and styling file inside the `materials` folder.
+We created a simple interface with two main sections: a Login section and a Dashboard section. Initially, the dashboard is hidden. After the user successfully logs in, the login section will be hidden, and the dashboard will be displayed.
+
+We can find the HTML template and styling files inside the ``materials`` folder. The ``index.html`` file should be moved to the ``templates`` folder and the ``style.css`` file should be moved to the ``static`` folder.
 
 #### Client-Side Logic (JavaScript)
-This is the most important part. The ``materials/app.js``  file acts as the bridge between the HTML events (clicks) and the Flask REST API. 
-The code listens for form submissions and button clicks, then makes API calls using fetch to the corresponding endpoints. For example, when a user logs in, it sends a POST request to ``/api/login``, stores the session, and updates the view to show tasks. Similarly, task actions like creating, updating state, or deleting a task are sent to the ``/api/tasks`` endpoints, and the page updates dynamically without reloading.
+This is the most important part. The JavaScript file acts as the bridge between HTML events (such as clicks) and the Express REST API.
 
-Helper functions manage view switching, display messages, and ensure only logged-in users can access protected sections.
+The code listens for form submissions and button clicks, then makes API calls using fetch to the corresponding endpoints. For example, when a user logs in, it sends a POST request to ``/api/login``, stores the session, and updates the view to display the user’s tasks. Similarly, task actions like creating, updating, or deleting a task are sent to the ``/api/tasks`` endpoints, and the page updates dynamically without reloading.
+
+Helper functions handle view switching, displaying messages, and ensuring that only logged-in users can access protected sections.
+
+The file is currently in the ``materials`` folder. We should move it  to the ``static`` folder so it can be served as a static asset by Flask.
 ### Token-Based Authentication 
 In the current Task Manager API, we use Flask-Session to manage authentication. This approach is effective for traditional web applications where the server and client are closely tied, and the browser handles session cookies automatically.
 
