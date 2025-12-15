@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager API</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+</head>
+<body>
+
+    <div class="container">
+
+        <div id="login-view">
+            <div class="auth-header">
+                <h2>Welcome Back</h2>
+                <p>Please login to manage your tasks.</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <input type="email" id="login-email" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="login-password" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn-primary">Log In</button>
+            </form>
+            <p class="auth-switch">
+                Don't have an account? <a href="#" onclick="showRegister()">Register here</a>
+            </p>
+            <p id="login-message" class="error-msg"></p>
+        </div>
+
+        <div id="register-view" style="display:none;">
+            <div class="auth-header">
+                <h2>Create Account</h2>
+                <p>Join us to get organized.</p>
+            </div>
+            <form id="register-form">
+                <div class="form-group">
+                    <input type="text" id="reg-username" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" id="reg-email" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="reg-password" placeholder="Password" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="reg-avatar" class="file-label">Upload Profile Picture (URL or File)</label>
+                    <input type="text" id="reg-avatar-url" placeholder="Paste Image URL">
+                    </div>
+
+                <button type="submit" class="btn-primary">Sign Up</button>
+            </form>
+            <p class="auth-switch">
+                Already have an account? <a href="#" onclick="showLogin()">Login here</a>
+            </p>
+            <p id="register-message" class="error-msg"></p>
+        </div>
+
+        <div id="app-view" style="display:none;">
+            
+            <nav class="app-nav">
+                <div class="user-info">
+                    <img id="nav-avatar" src="" alt="User" class="avatar-small">
+                    <span id="nav-username">User</span>
+                </div>
+                <div class="nav-links">
+                    <button onclick="showTasks()" class="nav-btn active" id="btn-tasks">
+                        Tasks
+                    </button>
+                    <button onclick="showProfile()" class="nav-btn" id="btn-profile">
+                        👤 Profile
+                    </button>
+                
+                </div>
+                
+            </nav>
+
+            <div id="tasks-section">
+                <div class="section-header">
+                    <h3>My Tasks</h3>
+                </div>
+
+                <div class="task-form">
+                    <input type="text" id="task-name" placeholder="What needs to be done?" required>
+                    <button onclick="createTask()" class="btn-add">+</button>
+                </div>
+
+                <ul id="task-list">
+                    </ul>
+            </div>
+
+            <div id="profile-section" style="display:none;">
+                <div class="section-header">
+                    <h3>Edit Profile</h3>
+                </div>
+
+                <div class="profile-card">
+                    <div class="profile-image-wrapper">
+                        <img id="profile-avatar-preview" src="https://via.placeholder.com/100" alt="Avatar">
+                    </div>
+                    
+                    <form id="profile-form">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" id="profile-username">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="profile-email">
+                        </div>
+                        <div class="form-group">
+                            <label>Avatar URL</label>
+                            <input type="text" id="profile-avatar">
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" onclick="updateProfile()" class="btn-primary">Save Changes</button>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="profile-password" placeholder="Leave blank to keep current">
+                        </div>
+                        <button type="button" onclick="updatePassword()" class="btn-warning">Update Password</button>
+                    </form>
+                    <p id="profile-message"></p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
