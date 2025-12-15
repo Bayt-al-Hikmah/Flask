@@ -1007,3 +1007,83 @@ For every subsequent API request, we need to include this token in the **Authori
 'Authorization': `Bearer ${localStorage.getItem('token')}` 
 ```
 to the headers of each `fetch` request. This ensures that only authenticated users can access protected endpoints.
+
+### API Rate Limiting
+As our API gains more users, we need to protect it from abuse, excessive load, and denial-of-service (DoS) attacks. Rate Limiting is the practice of restricting the number of API requests a user (or IP address) can make within a specific time window.
+#### Implementing Rate Limiting
+The easiest way to implement rate limiting in Flask is by using the **`Flask-Limiter`** extension, we start by installing it using
+```shell
+pip install Flask-Limiter
+```
+#### Installing Redis
+Redis (**Remote Dictionary Server**) is a very fast, in-memory data store. It is commonly used for **caching**, **sessions**, **queues**, and **rate limiting**. Because Redis keeps data in memory, it is much faster than traditional databases, which makes it ideal for tasks like tracking API requests in real time.
+
+In our project, Redis is used by **Flask-Limiter** to store rate-limit data, allowing limits to persist and work correctly even if the server restarts or runs on multiple instances.  
+We install it as following 
+
+- Ubuntu / Debian:
+```
+sudo apt update
+sudo apt install redis-server
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+
+```
+- macOS (Homebrew):
+```
+brew install redis
+brew services start redis
+```
+
+- Windows Redis is not officially supported on Windows, but we can use **Redis for Windows** provided by the community [Redis for Windows](https://github.com/tporadowski/redis/releases).
+#### Configuring Limiter
+After installing Redis, we create a new file called **`limiter.py`**. In this file, we initialize **Flask-Limiter**, which will protect our API from excessive requests.
+
+We configure the limiter to:
+- Use the client’s IP address to track requests
+- Store rate-limit data in **Redis**
+- Apply default limits to all API endpoints
+```python
+from flask_limiter.util import get_remote_address
+from flask_limiter import Limiter
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri="redis://localhost:6379/0",
+    default_limits=["200 per day", "50 per hour"])
+```
+With this setup, every endpoint in our application is automatically limited unless we override the limits on a specific route. Redis ensures that these limits are fast, reliable, and persistent even if the server restarts.
+#### Apply the Rate Limit
+Finally we can apply limits globally or to specific API routes.
+**Global Limit:** The default limits above apply to every route unless overridden. we set this in `app.py` file by adding
+```python
+from limiter import limiter
+
+limiter.init_app(app)
+```
+ **Specific Endpoint Limit:** We can use the `@limiter.limit` decorator on our resource methods, for example setting rate limit to 5 api call per minute:
+```python
+from limiter import limiter
+
+class LoginResource(Resource):
+    @limiter.limit("5 per minute")
+
+    def post(self):
+        # ... login logic ...
+        pass
+```
+We can override the default rate limit and apply a much higher limit to a protected endpoint for a logged-in user, for example here we set 100 api call per minute:
+```python
+# In api/Tasks.py
+from limiter import limiter
+
+class TaskListResource(Resource):
+    @jwt_required()
+    @limiter.limit("100 per minute", override_defaults=True) # Higher limit for logged-in users
+    def get(self):
+        # ... task retrieval logic ...
+        pass
+```
+Rate limiting ensures your API remains responsive and stable, providing a layer of security and robustness as your application scales.
+
+
