@@ -12,7 +12,8 @@ To fix this, we can use an API to send and receive small chunks of data and upda
 API (**Application Programming Interface**) is a layer that we add to our web app to connect the frontend with the backend. Our app uses the API to retrieve and send data to the server. The backend receives the data, saves the results, processes whatever is needed, and then returns the updated information to the frontend.   
 APIs make it easier to extend our application and make it available on platforms other than the browser. For example, if we want to build a mobile application for our web app, we only need to create the user interface and connect it to our web server using the API. The same backend logic and data can be reused without any changes.
 
-![[Pasted image 20251209233754.png]]
+![](./api.png)
+
 
 ### Javascript Role
 To use the API in our web application, we rely on JavaScript.  
