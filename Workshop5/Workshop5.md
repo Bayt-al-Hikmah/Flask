@@ -197,7 +197,7 @@ api = Api(app)
 ```
 In this setup, we prepare the basic parts of our Flask application. We load environment variables, We configured Flask-Session to manage user login sessions and set simple security options for cookies. After that, we connected SQLAlchemy to a SQLite database and initialize it. Finally, we create a Flask-RESTful API instance, which we will use to build our API endpoints.
 
-#### Creating API Resources
+#### Creating Auth Resources
 Now let’s start creating our API resources. We begin with the authentication resources, which are responsible for handling user registration and login. These resources manage how users create accounts, authenticate themselves, and start a session with the application.
 
 **``api/Auth.py``**
@@ -253,7 +253,7 @@ These resources will run on the following routes:
 - **POST `/api/register`** Register a new user
 - **POST `/api/login`** Log in an existing user
 
-
+#### Creating User Resources
 Now that authentication is in place, we can move on to the **User resource**. This resource is responsible for managing user-related actions **after the user is logged in**.
 
 Through the User resource, a logged-in user can view their profile information, update their username or email, change their password, and update their avatar. All these actions require authentication, so the user must have an active session before accessing these endpoints.
@@ -321,7 +321,7 @@ This resource will run on the following route:
 - **GET `/api/user`** Retrieve the logged-in user’s profile
 - **PUT `/api/user`** Update username, email, or avatar
 - **PATCH `/api/user`** Change the user’s password
-
+#### Creating Task Resources
 Finally, we create the **Task resource**, which is responsible for managing all task-related actions in our application. This resource allows a logged-in user to create new tasks, view their existing tasks, update task information, and delete tasks.
 
 Each task is linked to the currently authenticated user using the session, ensuring that users can only access and modify their own tasks. All task endpoints are protected, so the user must be logged in before performing any task operation.
@@ -459,6 +459,7 @@ First, we install it using:
 ```shell
 pip install Flask-JWT-Extended PyJWT==2.9.0
 ```
+#### Configuring Our App
 Now in our **`app.py`** we remove the session configuration and we initialize the JWT extension and set a secret key for signing tokens:
 ```python
 # ... existing imports ...
@@ -474,6 +475,7 @@ app.config.update(
 )
 jwt = JWTManager(app)
 ```
+#### Editing The LoginResource
 Now we need to edit our  **`api/Auth.py`**, we modify the `LoginResource` to generate and return a token instead of setting a session variable:
 ```python
 # In api/Auth.py
@@ -494,7 +496,7 @@ class LoginResource(Resource):
         return {"message": "Login successful", "access_token": access_token}, 200
 ```
 We returning access token to our front end, we can save them and send them in our requests.
-
+#### Applying The JWT on Task and User Resource
 Finally we add protection to `/api/Tasks` and `/api/Users`  , we use the `@jwt_required()` decorator. This automatically verifies the token in the request header, and if valid, makes the user's identity available via `get_jwt_identity()`:
 
 **``api/User.py``**
