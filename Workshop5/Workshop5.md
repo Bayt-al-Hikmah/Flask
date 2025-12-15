@@ -1085,6 +1085,6 @@ class TaskListResource(Resource):
         # ... task retrieval logic ...
         pass
 ```
-Rate limiting ensures your API remains responsive and stable, providing a layer of security and robustness as your application scales.
+Rate limiting ensures our API remains responsive and stable, providing a layer of security and robustness as our application scales.
 
 
