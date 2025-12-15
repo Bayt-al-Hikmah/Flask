@@ -72,7 +72,7 @@ After setting up our virtual environment, it’s time to install the packages re
 
 For this project, we will use **Flask** as the web framework, Flask-Session for session management, SQLAlchemy for database interaction, and Flask-RESTful to simplify the creation of REST APIs with the Flask framework.
 ```shell
-pip install flask flask-session sqlalchemy flask-restful flask-sqlalchemy argon2-cffi
+pip install flask flask-session sqlalchemy flask-restful flask-sqlalchemy argon2-cffi dotenv
 ```
 ### Creating Database Models 
 Now we move to creating our database models. we only need two core models: the **User** model and the **Task** model.
@@ -126,7 +126,6 @@ class Task(db.Model):
     __tablename__ = 'tasks'
     id: Mapped[int] = db.Column(db.Integer, primary_key=True)
     name: Mapped[str] = db.Column(db.String(120), nullable=False)
-    description: Mapped[str]  = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     state: Mapped[str]  = db.Column(db.String(20), default='active')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -204,32 +203,39 @@ Now let’s start creating our API resources. We begin with the authentication r
 ```python
 from flask import request, session
 from flask_restful import Resource
-from models import db, User
+from models import db
+from models.User import User
 from argon2 import PasswordHasher
 
 ph = PasswordHasher()
+
 class RegisterResource(Resource):
-    def post(self):
-        data = request.get_json()
-        user = User(
-            username=data['username'],
-            email=data['email'],
-            password=ph.hash(data['password']),  
-            avatar=data.get('avatar')
-        )
-        
-        db.session.add(user)
-        db.session.commit()
-        return {"message": "User registered successfully"}, 201
+    def post(self):
+        data = request.get_json()
+        user = User(
+            username=data['username'],
+            email=data['email'],
+            password=ph.hash(data['password']),   
+            avatar=data.get('avatar')
+        )
+
+        db.session.add(user)
+        db.session.commit()
+        return {"message": "User registered successfully"}, 201
+
 
 class LoginResource(Resource):
-    def post(self):
-        data = request.get_json()
-        user = User.query.filter_by(email=data['email']).first()
-        if not user or not ph.verify(user.password , data['password']):
-            return {"message": "Invalid email or password"}, 401
-        session['user_id'] = user.id
-        return {"message": "Login successful"}, 200
+    def post(self):
+        data = request.get_json()
+        user = User.query.filter_by(email=data['email']).first()
+        try:
+            verified = ph.verify(user.password , data['password'])
+        except:
+            verified = False
+        if not user or not verified :
+            return {"message": "Invalid email or password"}, 401
+        session['user_id'] = user.id
+        return {"message": "Login successful"}, 200
 ```
 We defined two authentication API resources using **Flask-RESTful**. Both resources inherit from the `Resource` class and implement the `post` method to handle incoming POST requests.
 
@@ -255,46 +261,48 @@ Through the User resource, a logged-in user can view their profile information, 
 ```python
 from flask import request, session
 from flask_restful import Resource
-from models import db, User
+from models import db
+from models.User import User
+from argon2 import PasswordHasher
+
+ph = PasswordHasher()
 
 def require_login():
-    return 'user_id' in session
+     return 'user_id' in session
+
 
 class UserResource(Resource):
+     def get(self):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
+          user = User.query.get(session['user_id'])
+          return {
+               "id": user.id,
+               "username": user.username,
+               "email": user.email,
+               "avatar": user.avatar
+          }, 200
 
-    def get(self):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
-        user = User.query.get(session['user_id'])
-        return {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "avatar": user.avatar
-        }, 200
+     def put(self):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
 
-    def put(self):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
+          user = User.query.get(session['user_id'])
+          data = request.get_json()
+          user.username = data.get('username', user.username)
+          user.email = data.get('email', user.email)
+          user.avatar = data.get('avatar', user.avatar)
+          db.session.commit()
+          return {"message": "User profile updated successfully"}, 200
 
-        user = User.query.get(session['user_id'])
-        data = request.get_json()
-
-        user.username = data.get('username', user.username)
-        user.email = data.get('email', user.email)
-        user.avatar = data.get('avatar', user.avatar)
-        db.session.commit()
-        return {"message": "User profile updated successfully"}, 200
-
-    def patch(self):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
-        user = User.query.get(session['user_id'])
-        data = request.get_json()
-
-        user.password = ph.hash(data['password'])
-        db.session.commit()
-        return {"message": "Password updated successfully"}, 200
+     def patch(self):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
+          user = User.query.get(session['user_id'])
+          data = request.get_json()
+          user.password = ph.hash(data['password'])
+          db.session.commit()
+          return {"message": "Password updated successfully"}, 200
 ```
 As before here we defined a **User API resource** . This resource inherits from the `Resource` class and provides multiple HTTP methods to manage the logged-in user’s profile.
 
@@ -321,73 +329,68 @@ Each task is linked to the currently authenticated user using the session, ensur
 ```python
 from flask import request, session
 from flask_restful import Resource
-from models import db, Task
+from models import db
+from models.Task import Task
+
 
 def require_login():
-    return 'user_id' in session
+     return 'user_id' in session
 
 class TaskListResource(Resource):
-    def get(self):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
-        tasks = Task.query.filter_by(user_id=session['user_id']).all()
-        return [
-            {
-                "id": task.id,
-                "name": task.name,
-                "description": task.description,
-                "state": task.state,
-                "created_at": task.created_at.isoformat()
-            }
-            for task in tasks
-        ], 200
+     def get(self):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
+          tasks = Task.query.filter_by(user_id=session['user_id']).all()
+          return [
+               {
+                    "id": task.id,
+                    "name": task.name,
+                    "state": task.state,
+                    "created_at": task.created_at.isoformat()
+               }
+               for task in tasks
+          ], 200
 
-    def post(self):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
-        data = request.get_json()
-        task = Task(
-            name=data['name'],
-            description=data.get('description'),
-            user_id=session['user_id']
-        )
-        db.session.add(task)
-        db.session.commit()
-        return {"message": "Task created successfully"}, 201
+     def post(self):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
+          data = request.get_json()
+          task = Task(
+               name=data['name'],
+               user_id=session['user_id']
+          )
+          db.session.add(task)
+          db.session.commit()
+          return {"message": "Task created successfully"}, 201
 
 class TaskResource(Resource):
+     def put(self, task_id):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
+          task = Task.query.filter_by(
+               id=task_id,
+               user_id=session['user_id']
+          ).first()
+          if not task:
+               return {"message": "Task not found"}, 404
+          data = request.get_json()
+          task.name = data.get('name', task.name)
+          task.state = data.get('state', task.state)
+          db.session.commit()
+          return {"message": "Task updated successfully"}, 200
 
-    def put(self, task_id):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
-
-        task = Task.query.filter_by(
-            id=task_id,
-            user_id=session['user_id']
-        ).first()
-
-        if not task:
-            return {"message": "Task not found"}, 404
-
-        data = request.get_json()
-        task.name = data.get('name', task.name)
-        task.description = data.get('description', task.description)
-        task.state = data.get('state', task.state)
-        db.session.commit()
-        return {"message": "Task updated successfully"}, 200
-
-    def delete(self, task_id):
-        if not require_login():
-            return {"message": "Unauthorized"}, 401
-        task = Task.query.filter_by(
-            id=task_id,
-            user_id=session['user_id']
-        ).first()
-        if not task:
-            return {"message": "Task not found"}, 404
-        db.session.delete(task)
-        db.session.commit()
-        return {"message": "Task deleted successfully"}, 200
+     def delete(self, task_id):
+          if not require_login():
+               return {"message": "Unauthorized"}, 401
+          task = Task.query.filter_by(
+               id=task_id,
+               user_id=session['user_id']
+          ).first()
+          if not task:
+               return {"message": "Task not found"}, 404
+          db.session.delete(task)
+          db.session.commit()
+          return {"message": "Task deleted successfully"}, 200
 ```
 We defined two task-related API resources using **Flask-RESTful**. 
 
@@ -408,3 +411,599 @@ These resources will run on the following routes:
 - **DELETE `/api/tasks/<task_id>`** Delete a task
 
 ### Creating The Interface
+Now that our API is fully functional, we need a user interface to interact with it. Instead of the server rendering HTML pages for every route, we will serve a single HTML file (Single Page Application approach) and use JavaScript to fetch data from our API and update the DOM dynamically.
+#### Serving the Entry Point
+We need to update our `app.py` to serve the `index.html` file when a user visits the root URL.
+
+**`app.py`**
+```python
+
+# ... existing code ... 
+@app.route('/') 
+def index(): 
+	return render_template('index.html') 
+
+if __name__ == '__main__': 
+	app.run(debug=True)
+```
+Now, when you visit `http://127.0.0.1:5000/`, Flask will serve the HTML file, and the rest of the application interaction will happen via JavaScript calling our API endpoints.
+#### The HTML Structure
+We will create a simple interface with two main sections: a **Login** section and a **Dashboard** section. Initially, the dashboard will be hidden.
+
+**`templates/index.html`**
+```html
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager API</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="container">
+        <div id="login-view">
+            <div class="auth-header">
+                <h2>Welcome Back</h2>
+                <p>Please login to manage your tasks.</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <input type="email" id="login-email" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="login-password" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn-primary">Log In</button>
+            </form>
+            <p class="auth-switch">
+                Don't have an account? <a href="#" onclick="showRegister()">Register here</a>
+            </p>
+            <p id="login-message" class="error-msg"></p>
+        </div>
+        <div id="register-view" style="display:none;">
+            <div class="auth-header">
+                <h2>Create Account</h2>
+                <p>Join us to get organized.</p>
+            </div>
+            <form id="register-form">
+                <div class="form-group">
+                    <input type="text" id="reg-username" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" id="reg-email" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="reg-password" placeholder="Password" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-avatar" class="file-label">Upload Profile Picture (URL or File)</label>
+                    <input type="text" id="reg-avatar-url" placeholder="Paste Image URL">
+                    </div>
+                <button type="submit" class="btn-primary">Sign Up</button>
+            </form>
+            <p class="auth-switch">
+                Already have an account? <a href="#" onclick="showLogin()">Login here</a>
+            </p>
+            <p id="register-message" class="error-msg"></p>
+        </div>
+        <div id="app-view" style="display:none;">
+            <nav class="app-nav">
+                <div class="user-info">
+                    <img id="nav-avatar" src="" alt="User" class="avatar-small">
+                    <span id="nav-username">User</span>
+                </div>
+                <div class="nav-links">
+                    <button onclick="showTasks()" class="nav-btn active" id="btn-tasks">Tasks
+                    </button>
+                    <button onclick="showProfile()" class="nav-btn" id="btn-profile">Profile</button>
+                </div>
+            </nav>
+            <div id="tasks-section">
+                <div class="section-header">
+                    <h3>My Tasks</h3>
+                </div>
+                <div class="task-form">
+                    <input type="text" id="task-name" placeholder="What needs to be done?" required>
+                    <button onclick="createTask()" class="btn-add">+</button>
+                </div>
+                <ul id="task-list">
+                    </ul>
+            </div>
+            <div id="profile-section" style="display:none;">
+                <div class="section-header">
+                    <h3>Edit Profile</h3>
+                </div>
+                <div class="profile-card">
+                    <div class="profile-image-wrapper">
+                        <img id="profile-avatar-preview" src="https://via.placeholder.com/100" alt="Avatar">
+                    </div>
+                    <form id="profile-form">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" id="profile-username">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="profile-email">
+                        </div>
+                        <div class="form-group">
+                            <label>Avatar URL</label>
+                            <input type="text" id="profile-avatar">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" onclick="updateProfile()" class="btn-primary">Save Changes</button>
+                        </div>
+                        <hr>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="profile-password" placeholder="Leave blank to keep current">
+                        </div>
+                        <button type="button" onclick="updatePassword()" class="btn-warning">Update Password</button>
+                    </form>
+                    <p id="profile-message"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
+```
+#### Styling the Application
+For the style we will use the pre-set styling file that is stored inside the folder ``materials``
+
+#### Client-Side Logic (JavaScript)
+This is the most important part. The JavaScript file acts as the bridge between the HTML events (clicks) and the Flask REST API.
+```js
+
+const API_BASE = '/api';
+
+function switchView(viewId) {
+ 
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('register-view').style.display = 'none';
+    document.getElementById('app-view').style.display = 'none';
+    const targetView = document.getElementById(viewId);
+    if (targetView) {
+        targetView.style.display = 'block';
+    }
+}
+
+function displayMessage(elementId, message, isError = false) {
+    const msgElement = document.getElementById(elementId);
+    msgElement.innerText = message;
+    msgElement.style.color = isError ? '#dc3545' : '#28a745';
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    fetchUserProfile(false); 
+});
+
+function showRegister() {
+    switchView('register-view');
+    displayMessage('register-message', '');
+}
+
+function showLogin() {
+    switchView('login-view');
+    displayMessage('login-message', ''); 
+}
+
+
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    displayMessage('register-message', 'Registering...', false);
+
+    const username = document.getElementById('reg-username').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+    const avatar = document.getElementById('reg-avatar-url').value;
+
+    const response = await fetch(`${API_BASE}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password, avatar })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+        displayMessage('register-message', data.message, false);
+        document.getElementById('register-form').reset();
+        setTimeout(showLogin, 2000); 
+    } else {
+        displayMessage('register-message', data.message || "Registration failed.", true);
+    }
+});
+
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    displayMessage('login-message', 'Logging in...', false);
+
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    const response = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+        displayMessage('login-message', data.message, false);
+        document.getElementById('login-form').reset();
+        switchView('app-view');
+        showTasks(); 
+        fetchUserProfile(true); 
+    } else {
+        displayMessage('login-message', data.message || "Invalid email or password.", true);
+    }
+});
+
+
+
+function showTasks() {
+    document.getElementById('tasks-section').style.display = 'block';
+    document.getElementById('profile-section').style.display = 'none';
+    document.getElementById('btn-tasks').classList.add('active');
+    document.getElementById('btn-profile').classList.remove('active');
+    fetchTasks();
+}
+
+function showProfile() {
+    document.getElementById('tasks-section').style.display = 'none';
+    document.getElementById('profile-section').style.display = 'block';
+    document.getElementById('btn-profile').classList.add('active');
+    document.getElementById('btn-tasks').classList.remove('active');
+    fetchUserProfile(true); 
+    displayMessage('profile-message', '');
+}
+
+
+async function fetchUserProfile(populateForm) {
+    const response = await fetch(`${API_BASE}/user`);
+
+    if (response.status === 401) {
+        switchView('login-view');
+        return;
+    }
+
+    if (response.ok) {
+        const user = await response.json();
+        
+        
+        document.getElementById('nav-username').innerText = user.username;
+        const avatarUrl = user.avatar || 'https://via.placeholder.com/32?text=U';
+        document.getElementById('nav-avatar').src = avatarUrl;
+        
+     
+        if (!populateForm) {
+            switchView('app-view');
+            showTasks();
+        }
+
+        
+        if (populateForm) {
+            document.getElementById('profile-username').value = user.username;
+            document.getElementById('profile-email').value = user.email;
+            document.getElementById('profile-avatar').value = user.avatar;
+            document.getElementById('profile-avatar-preview').src = avatarUrl;
+        }
+    } else {
+        switchView('login-view');
+    }
+}
+
+async function updateProfile() {
+    displayMessage('profile-message', 'Saving profile...', false);
+    
+    const username = document.getElementById('profile-username').value;
+    const email = document.getElementById('profile-email').value;
+    const avatar = document.getElementById('profile-avatar').value;
+
+    const response = await fetch(`${API_BASE}/user`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, avatar })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+        displayMessage('profile-message', data.message, false);
+        fetchUserProfile(true); 
+    } else {
+        displayMessage('profile-message', data.message || "Failed to update profile.", true);
+    }
+}
+
+async function updatePassword() {
+    displayMessage('profile-message', 'Changing password...', false);
+    
+    const password = document.getElementById('profile-password').value;
+
+    if (!password) {
+        displayMessage('profile-message', 'Please enter a new password.', true);
+        return;
+    }
+
+    const response = await fetch(`${API_BASE}/user`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+        displayMessage('profile-message', data.message, false);
+        document.getElementById('profile-password').value = ''; // Clear field
+    } else {
+        displayMessage('profile-message', data.message || "Failed to change password.", true);
+    }
+}
+
+async function fetchTasks() {
+    const response = await fetch(`${API_BASE}/tasks`);
+    
+    if (response.status === 401) return logout(); 
+    
+    const tasks = await response.json();
+    const list = document.getElementById('task-list');
+    list.innerHTML = ''; 
+
+    if (tasks.length === 0) {
+        list.innerHTML = '<li style="justify-content: center; color: #888;">No tasks yet! Add one above.</li>';
+        return;
+    }
+
+    tasks.forEach(task => {
+        const isDone = task.state === 'done';
+        const li = document.createElement('li');
+        li.className = isDone ? 'task-done' : '';
+
+        const taskNameSpan = document.createElement('span');
+        taskNameSpan.innerText = `${task.name} (${task.state})`;
+        
+        const toggleBtn = document.createElement('button');
+        toggleBtn.innerText = isDone ? 'Reactivate' : 'Mark Done';
+        toggleBtn.className = isDone ? 'delete-btn' : 'toggle-btn';
+        toggleBtn.onclick = () => updateTaskState(task.id, isDone ? 'active' : 'done');
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerText = 'Delete';
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.onclick = () => deleteTask(task.id);
+
+        li.appendChild(taskNameSpan);
+        li.appendChild(toggleBtn);
+        li.appendChild(deleteBtn);
+        list.appendChild(li);
+    });
+}
+
+async function createTask() {
+    const nameInput = document.getElementById('task-name');
+    const name = nameInput.value.trim();
+    if (!name) return;
+
+    await fetch(`${API_BASE}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+    });
+
+    nameInput.value = ''; 
+    fetchTasks(); 
+}
+
+async function updateTaskState(taskId, newState) {
+    await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: newState }) 
+    });
+    fetchTasks(); 
+}
+
+
+async function deleteTask(taskId) {
+    if(!confirm("Are you sure you want to delete this task?")) return;
+
+    await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'DELETE'
+    });
+    fetchTasks(); 
+}
+
+```
+
+This JavaScript file is the client-side logic that connects the HTML interface with our Flask REST API. It handles user interactions such as logging in, registering, viewing and updating the profile, and managing tasks.
+
+The code listens for form submissions and button clicks, then makes API calls using fetch to the corresponding endpoints. For example, when a user logs in, it sends a POST request to ``/api/login``, stores the session, and updates the view to show tasks. Similarly, task actions like creating, updating state, or deleting a task are sent to the ``/api/tasks`` endpoints, and the page updates dynamically without reloading.
+
+Helper functions manage view switching, display messages, and ensure only logged-in users can access protected sections. Overall, this file acts as a bridge between the user interface and the backend, keeping the app interactive and responsive.
+### Token-Based Authentication 
+In the current Task Manager API, we use Flask-Session to manage authentication. This approach is effective for traditional web applications where the server and client are closely tied, and the browser handles session cookies automatically.
+
+However, modern APIs often require authentication that is **stateless** and can be easily used by various clients (mobile apps, other servers, JavaScript frontends). This is where Token-Based Authentication comes in.
+#### How Tokens Work
+Instead of the server storing session data for every user (stateful), the server issues a secure, self-contained token (like a JSON Web Token or JWT) upon successful login.
+1. **Client Logs In:** The user sends credentials (username/password) to the `/api/login` endpoint.
+2. **Server Generates Token:** If successful, the server creates a unique token containing the user's ID, expiration time, and a secure signature. The token is returned in the response.
+3. **Client Stores Token:** The frontend (e.g., JavaScript) stores this token (usually in local storage).
+4. **API Access:** For every subsequent request to protected endpoints (e.g., `/api/tasks`), the client includes this token in the `Authorization` header, typically prefixed with `Bearer`.
+5. **Server Verification:** The server receives the request, verifies the token's signature, extracts the user ID, and grants access. No database lookup for a session is required, making the API stateless and faster.
+#### Implementing Token Authentication with Flask
+While Flask-RESTful is great for resource definition, it doesn't natively handle JWT generation and verification. We typically use a specialized library like **`Flask-JWT-Extended`** for this purpose.
+
+First, we install it using:
+```shell
+pip install Flask-JWT-Extended PyJWT==2.9.0
+```
+Now in our **`app.py`** we remove the session configuration and we initialize the JWT extension and set a secret key for signing tokens:
+```python
+# ... existing imports ...
+from flask_jwt_extended import JWTManager
+
+
+# ... existing app initialization ...
+
+# Add a secret key for JWT signing
+app.config.update(
+    JWT_SECRET_KEY=os.getenv("JWT_SECRET"),
+    JWT_ACCESS_TOKEN_EXPIRES=timedelta(hours=1)
+)
+jwt = JWTManager(app)
+```
+Now we need to edit our  **`api/Auth.py`**, we modify the `LoginResource` to generate and return a token instead of setting a session variable:
+```python
+# In api/Auth.py
+from flask_jwt_extended import create_access_token
+
+class LoginResource(Resource):
+    def post(self):
+        data = request.get_json()
+        user = User.query.filter_by(email=data['email']).first()
+        try:
+            verified = ph.verify(user.password , data['password'])
+        except:
+            verified = False
+        if not user or not verified :
+            return {"message": "Invalid email or password"}, 401
+        
+        access_token = create_access_token(identity=user.id)
+        return {"message": "Login successful", "access_token": access_token}, 200
+```
+We returning access token to our front end, we can save them and send them in our requests.
+
+Finally we add protection to `/api/Tasks` and `/api/Users`  , we use the `@jwt_required()` decorator. This automatically verifies the token in the request header, and if valid, makes the user's identity available via `get_jwt_identity()`:
+
+**``api/User.py``**
+```python
+from flask import request
+from flask_restful import Resource
+from models import db
+from models.User import User
+from argon2 import PasswordHasher
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+ph = PasswordHasher()
+
+class UserResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user_id = get_jwt_identity() 
+        user = User.query.get(current_user_id)
+        return {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "avatar": user.avatar
+        }, 200
+
+    @jwt_required()
+    def put(self):
+        current_user_id = get_jwt_identity() 
+        user = User.query.get(current_user_id)
+        data = request.get_json()
+
+        user.username = data.get('username', user.username)
+        user.email = data.get('email', user.email)
+        user.avatar = data.get('avatar', user.avatar)
+        db.session.commit()
+        return {"message": "User profile updated successfully"}, 200
+    @jwt_required()
+    def patch(self):
+        current_user_id = get_jwt_identity() 
+        user = User.query.get(current_user_id)
+        data = request.get_json()
+
+        user.password = ph.hash(data['password'])
+        db.session.commit()
+        return {"message": "Password updated successfully"}, 200
+```
+**``api/Task.py``**
+```python
+from flask import request, session
+from flask_restful import Resource
+from models import db
+from models.Task import Task
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+class TaskListResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user_id = get_jwt_identity() 
+        tasks = Task.query.filter_by(user_id=current_user_id).all()
+        return [
+            {
+                "id": task.id,
+                "name": task.name,
+                "state": task.state,
+                "created_at": task.created_at.isoformat()
+            }
+            for task in tasks
+        ], 200
+
+    @jwt_required()
+    def post(self):
+        current_user_id = get_jwt_identity() 
+        data = request.get_json()
+        task = Task(
+            name=data['name'],
+            user_id=current_user_id
+        )
+        db.session.add(task)
+        db.session.commit()
+        return {"message": "Task created successfully"}, 201
+
+class TaskResource(Resource):
+    @jwt_required()
+    def put(self, task_id):
+        current_user_id = get_jwt_identity() 
+        task = Task.query.filter_by(
+            id=task_id,
+            user_id=current_user_id
+        ).first()
+
+        if not task:
+            return {"message": "Task not found"}, 404
+
+        data = request.get_json()
+        task.name = data.get('name', task.name)
+        task.state = data.get('state', task.state)
+        db.session.commit()
+        return {"message": "Task updated successfully"}, 200
+    @jwt_required()
+    def delete(self, task_id):
+        current_user_id = get_jwt_identity() 
+    
+        task = Task.query.filter_by(
+            id=task_id,
+            user_id=current_user_id
+        ).first()
+        if not task:
+            return {"message": "Task not found"}, 404
+        db.session.delete(task)
+        db.session.commit()
+        return {"message": "Task deleted successfully"}, 200
+```
+This simple change moves the application from stateful (session) to stateless (token) authentication, which is the standard for building high-performance APIs.
+#### Editing the Javascript
+Now we update our JavaScript to work with JWT authentication. When a user logs in, the backend returns a token, which we store in the browser using:
+```javascript
+localStorage.setItem('token', data.access_token);
+```
+For every subsequent API request, we need to include this token in the **Authorization header** so the backend can verify the user. This is done by adding:
+```js
+'Authorization': `Bearer ${localStorage.getItem('token')}` 
+```
+to the headers of each `fetch` request. This ensures that only authenticated users can access protected endpoints.
