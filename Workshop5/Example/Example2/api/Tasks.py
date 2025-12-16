@@ -1,4 +1,4 @@
-from flask import request, session
+from flask import request
 from flask_restful import Resource
 from models import db
 from models.Task import Task

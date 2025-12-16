@@ -49,9 +49,8 @@
                 
                 <div class="form-group">
                     <label for="reg-avatar" class="file-label">Upload Profile Picture (URL or File)</label>
-                    <input type="text" id="reg-avatar-url" placeholder="Paste Image URL">
+                    <input type="file" id="reg-avatar">
                     </div>
-
                 <button type="submit" class="btn-primary">Sign Up</button>
             </form>
             <p class="auth-switch">
@@ -72,7 +71,7 @@
                         Tasks
                     </button>
                     <button onclick="showProfile()" class="nav-btn" id="btn-profile">
-                        👤 Profile
+                        Profile
                     </button>
                 
                 </div>
@@ -100,7 +99,7 @@
 
                 <div class="profile-card">
                     <div class="profile-image-wrapper">
-                        <img id="profile-avatar-preview" src="https://via.placeholder.com/100" alt="Avatar">
+                        <img id="avatar-preview" src="" alt="Avatar">
                     </div>
                     
                     <form id="profile-form">
@@ -114,7 +113,7 @@
                         </div>
                         <div class="form-group">
                             <label>Avatar URL</label>
-                            <input type="text" id="profile-avatar">
+                            <input type="file" id="profile-avatar">
                         </div>
                         
                         <div class="form-actions">

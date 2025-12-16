@@ -4,20 +4,26 @@ from models import db
 from models.User import User
 from argon2 import PasswordHasher
 from flask_jwt_extended import create_access_token
-from limiter import limiter
-
+from utils import verify_and_save_avatar
+from  limiter import limiter
 ph = PasswordHasher()
-
 
 class RegisterResource(Resource):
     def post(self):
-        data = request.get_json()
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        avatar_file = request.files.get('avatar')
+        (state,filename) = verify_and_save_avatar(avatar_file)
+        if not state:
+            return {"message": "not allowed file formate"}, 403
         user = User(
-            username=data['username'],
-            email=data['email'],
-            password=ph.hash(data['password']),   
-            avatar=data.get('avatar')
+            username=username,
+            email=email,
+            password=ph.hash(password), 
+            avatar=filename
         )
+
         db.session.add(user)
         db.session.commit()
         return {"message": "User registered successfully"}, 201

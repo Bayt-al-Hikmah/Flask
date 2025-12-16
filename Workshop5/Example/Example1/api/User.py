@@ -3,6 +3,7 @@ from flask_restful import Resource
 from models import db
 from models.User import User
 from argon2 import PasswordHasher
+from utils import verify_and_save_avatar
 
 ph = PasswordHasher()
 
@@ -25,12 +26,19 @@ class UserResource(Resource):
      def put(self):
           if not require_login():
                return {"message": "Unauthorized"}, 401
-
           user = User.query.get(session['user_id'])
-          data = request.get_json()
-          user.username = data.get('username', user.username)
-          user.email = data.get('email', user.email)
-          user.avatar = data.get('avatar', user.avatar)
+          username = request.form.get('username', user.username)
+          email = request.form.get('email', user.email)
+          avatar_file = request.files.get('avatar')
+          if avatar_file != None:
+               (state,name) = verify_and_save_avatar(avatar_file)
+               print(name)
+               user.avatar = name or user.avatar
+               if not state:
+                    return {"message": "not allowed file formate"}, 403
+          user.username = username
+          user.email = email
+          
           db.session.commit()
           return {"message": "User profile updated successfully"}, 200
 

@@ -28,16 +28,27 @@ function showLogin() {
 document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     displayMessage('register-message', 'Registering...', false);
+
     const username = document.getElementById('reg-username').value;
     const email = document.getElementById('reg-email').value;
     const password = document.getElementById('reg-password').value;
-    const avatar = document.getElementById('reg-avatar-url').value;
+    const avatarFile = document.getElementById('reg-avatar').files[0]; // file input
+
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('email', email);
+    formData.append('password', password);
+    if (avatarFile) {
+        formData.append('avatar', avatarFile);
+    }
+
     const response = await fetch(`${API_BASE}/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password, avatar })
+        body: formData
     });
+
     const data = await response.json();
+
     if (response.ok) {
         displayMessage('register-message', data.message, false);
         document.getElementById('register-form').reset();
@@ -101,8 +112,7 @@ async function fetchUserProfile(populateForm) {
         if (populateForm) {
             document.getElementById('profile-username').value = user.username;
             document.getElementById('profile-email').value = user.email;
-            document.getElementById('profile-avatar').value = user.avatar;
-            document.getElementById('profile-avatar-preview').src = avatarUrl;
+            document.getElementById('avatar-preview').src = avatarUrl;
         }
     } else {
         switchView('login-view');
@@ -112,12 +122,19 @@ async function updateProfile() {
     displayMessage('profile-message', 'Saving profile...', false);
     const username = document.getElementById('profile-username').value;
     const email = document.getElementById('profile-email').value;
-    const avatar = document.getElementById('profile-avatar').value;
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('email', email);
+    const avatarFile = document.getElementById('profile-avatar').files[0];
+    console.log(avatarFile);
+    if (avatarFile) {
+        formData.append('avatar', avatarFile);
+    }
 
     const response = await fetch(`${API_BASE}/user`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, avatar })
+        
+        body: formData
     });
 
     const data = await response.json();

@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory 
 from models import db
 from flask_restful import Api
 from flask_session import Session
@@ -8,7 +8,7 @@ from datetime import timedelta
 from api.Auth import RegisterResource, LoginResource
 from api.User import UserResource
 from api.Tasks import TaskListResource, TaskResource
-
+from pathlib import Path
 
 load_dotenv()
 
@@ -40,11 +40,15 @@ api.add_resource(TaskListResource, '/api/tasks')
 api.add_resource(TaskResource, '/api/tasks/<int:task_id>')
 
 
-
+UPLOAD_DIR = Path('./uploads/avatars')
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/uploads/avatars/<filename>')
+def get_avatar(filename):
+    return send_from_directory(UPLOAD_DIR, filename)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -73,7 +73,7 @@ After setting up our virtual environment, it’s time to install the packages re
 
 For this project, we will use **Flask** as the web framework, Flask-Session for session management, SQLAlchemy for database interaction, and Flask-RESTful to simplify the creation of REST APIs with the Flask framework.
 ```shell
-pip install flask flask-session sqlalchemy flask-restful flask-sqlalchemy argon2-cffi dotenv
+pip install flask flask-session sqlalchemy flask-restful flask-sqlalchemy argon2-cffi dotenv 
 ```
 ### Creating Database Models 
 Now we move to creating our database models. we only need two core models: the **User** model and the **Task** model.
@@ -153,6 +153,32 @@ with app.app_context():
 This script imports the Flask application and the SQLAlchemy instance from `app.py`, then runs `db.create_all()` inside the application context.   
 
 Running this script once will automatically generate the **users** and **tasks** tables in our `database.db` file based on the models we defined earlier.
+### Creating Utils file to handel Upload
+We Create `utils.py` module and we create inside it helper function that will help us to handel uploads
+
+**`utils.py`**
+```
+import os
+import uuid
+from werkzeug.utils import secure_filename
+
+from pathlib import Path
+
+UPLOAD_DIR = Path('./uploads/avatars')
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def verify_and_save_avatar(avatar_file):
+    if not allowed_file(avatar_file.filename):
+        return False,"aa"
+    filename = filename = f"{uuid.uuid4().hex}_{secure_filename(avatar_file.filename)}"
+    avatar_path = os.path.join(UPLOAD_DIR, filename)
+    avatar_file.save(avatar_path)
+    return True, avatar_path
+```
 ### Building the REST API
 Now it’s time to build our REST API to connect our application with the server and the database. The RESTful API exposes resources as endpoints, allowing the frontend to communicate with our backend using standard HTTP methods.
 
@@ -168,11 +194,12 @@ We start by configuring Flask, SQLAlchemy, Flask-Session, and Flask-RESTful.
 ```python
 import os
 from dotenv import load_dotenv
-from flask import Flask
-from flask_session import Session
-from datetime import timedelta
+from flask import Flask, render_template, send_from_directory 
 from models import db
 from flask_restful import Api
+from flask_session import Session
+from datetime import timedelta
+from pathlib import Path
 load_dotenv()
 
 app = Flask(__name__)
@@ -191,6 +218,8 @@ app.config.update(
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+UPLOAD_DIR = Path('./uploads/avatars')
+
 db.init_app(app)
 Session(app)
 api = Api(app)
@@ -207,17 +236,24 @@ from flask_restful import Resource
 from models import db
 from models.User import User
 from argon2 import PasswordHasher
+from utils import verify_and_save_avatar
 
 ph = PasswordHasher()
 
 class RegisterResource(Resource):
     def post(self):
-        data = request.get_json()
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        avatar_file = request.files.get('avatar')
+        (state,filename) = verify_and_save_avatar(avatar_file)
+        if not state:
+            return {"message": "not allowed file formate"}, 403
         user = User(
-            username=data['username'],
-            email=data['email'],
-            password=ph.hash(data['password']),   
-            avatar=data.get('avatar')
+            username=username,
+            email=email,
+            password=ph.hash(password), 
+            avatar=filename
         )
 
         db.session.add(user)
@@ -235,7 +271,9 @@ class LoginResource(Resource):
             verified = False
         if not user or not verified :
             return {"message": "Invalid email or password"}, 401
+        
         session['user_id'] = user.id
+
         return {"message": "Login successful"}, 200
 ```
 We defined two authentication API resources using **Flask-RESTful**. Both resources inherit from the `Resource` class and implement the `post` method to handle incoming POST requests.
@@ -265,6 +303,7 @@ from flask_restful import Resource
 from models import db
 from models.User import User
 from argon2 import PasswordHasher
+from utils import verify_and_save_avatar
 
 ph = PasswordHasher()
 
@@ -287,12 +326,19 @@ class UserResource(Resource):
      def put(self):
           if not require_login():
                return {"message": "Unauthorized"}, 401
-
           user = User.query.get(session['user_id'])
-          data = request.get_json()
-          user.username = data.get('username', user.username)
-          user.email = data.get('email', user.email)
-          user.avatar = data.get('avatar', user.avatar)
+          username = request.form.get('username', user.username)
+          email = request.form.get('email', user.email)
+          avatar_file = request.files.get('avatar')
+          if avatar_file != None:
+               (state,name) = verify_and_save_avatar(avatar_file)
+               print(name)
+               user.avatar = name or user.avatar
+               if not state:
+                    return {"message": "not allowed file formate"}, 403
+          user.username = username
+          user.email = email
+          
           db.session.commit()
           return {"message": "User profile updated successfully"}, 200
 
@@ -424,6 +470,11 @@ We need to update our `app.py` to serve the `index.html` file when a user vi
 def index(): 
 	return render_template('index.html') 
 
+@app.route('/uploads/avatars/<filename>')
+def get_avatar(filename):
+    return send_from_directory(UPLOAD_DIR, filename)
+
+
 if __name__ == '__main__': 
 	app.run(debug=True)
 ```
@@ -507,6 +558,7 @@ from models import db
 from models.User import User
 from argon2 import PasswordHasher
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from utils import verify_and_save_avatar
 
 ph = PasswordHasher()
 
@@ -515,6 +567,7 @@ class UserResource(Resource):
     def get(self):
         current_user_id = get_jwt_identity() 
         user = User.query.get(current_user_id)
+        print("here")
         return {
             "id": user.id,
             "username": user.username,
@@ -526,11 +579,18 @@ class UserResource(Resource):
     def put(self):
         current_user_id = get_jwt_identity() 
         user = User.query.get(current_user_id)
-        data = request.get_json()
-
-        user.username = data.get('username', user.username)
-        user.email = data.get('email', user.email)
-        user.avatar = data.get('avatar', user.avatar)
+        username = request.form.get('username', user.username)
+        email = request.form.get('email', user.email)
+        avatar_file = request.files.get('avatar')
+        if avatar_file != None:
+            (state,name) = verify_and_save_avatar(avatar_file)
+            print(name)
+            user.avatar = name or user.avatar
+            if not state:
+                return {"message": "not allowed file formate"}, 403
+        
+        user.username = username
+        user.email = email
         db.session.commit()
         return {"message": "User profile updated successfully"}, 200
     @jwt_required()
@@ -545,7 +605,7 @@ class UserResource(Resource):
 ```
 **``api/Task.py``**
 ```python
-from flask import request, session
+from flask import request
 from flask_restful import Resource
 from models import db
 from models.Task import Task
