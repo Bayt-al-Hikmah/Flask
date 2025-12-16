@@ -649,6 +649,11 @@ brew services start redis
 ```
 
 - Windows Redis is not officially supported on Windows, but we can use **Redis for Windows** provided by the community [Redis for Windows](https://github.com/tporadowski/redis/releases).
+
+After that we install the redis package using
+```
+pip install redis
+```
 #### Configuring Limiter
 After installing Redis, we create a new file called **`limiter.py`**. In this file, we initialize **Flask-Limiter**, which will protect our API from excessive requests.
 
