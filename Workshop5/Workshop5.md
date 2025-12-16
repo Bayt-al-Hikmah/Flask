@@ -679,7 +679,7 @@ from limiter import limiter
 
 limiter.init_app(app)
 ```
- **Specific Endpoint Limit:** We can use the `@limiter.limit` decorator on our resource methods, for example setting rate limit to 5 api call per minute:
+ **Specific Endpoint Limit:** We can use the `@limiter.limit` decorator on our resource methods,to reduce the rate limit on specific endpoint for example setting rate limit to 5 api call per minute:
 ```python
 from limiter import limiter
 
@@ -690,7 +690,7 @@ class LoginResource(Resource):
         # ... login logic ...
         pass
 ```
-We can override the default rate limit and apply a much higher limit to a protected endpoint for a logged-in user, for example here we set 100 api call per minute:
+We can also override the default rate limit and apply a much higher limit to a protected endpoint for a logged-in user we do that by adding `override_defaults=True` argument, for example here we set 100 api call per minute:
 ```python
 # In api/Tasks.py
 from limiter import limiter
