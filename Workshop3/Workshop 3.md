@@ -631,7 +631,6 @@ Allowing users to upload files, such as profile pictures or attachments, is a co
 In Flask, we’ll use the **Werkzeug** utilities and **Flask-WTF** for form handling. We’ll ensure only **authenticated users** can upload, **sanitize filenames**, **validate file types**, and **store files safely** outside the main application directory.  
 **Installing Packages**
 ```shell
-pip install python-magic
 pip install python-magic-bin
 ```
 **`python-magic`** is a Python library that identifies a file’s true type by reading its **binary signature**, known as _magic bytes_, instead of trusting the file’s extension or user input. This makes it a powerful security tool for verifying uploaded files  for example, detecting whether an uploaded `.jpg` is actually an image or a disguised executable.
