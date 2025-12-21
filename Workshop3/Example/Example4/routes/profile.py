@@ -25,7 +25,7 @@ def profile():
             flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
             return redirect(url_for('profile.profile'))
         user['avatar'] = filename
-		current_app.users[username] = user
+        current_app.users[username] = user
         flash('Avatar uploaded successfully!', 'success')
         return redirect(url_for('profile.profile'))
     return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
