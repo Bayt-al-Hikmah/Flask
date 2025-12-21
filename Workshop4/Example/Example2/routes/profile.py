@@ -1,20 +1,12 @@
-import uuid
-import magic
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory 
-from werkzeug.utils import secure_filename
 from utils.forms import UploadForm
-from utils.funcs import login_required, allowed_file,with_db 
+from utils.funcs import login_required, upload_file,with_db 
 from pathlib import Path
 
 
 profile_bp = Blueprint('profile', __name__)
-
 UPLOAD_DIR = Path('./uploads/avatars')
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Allowed extensions and MIME types
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
 @profile_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 @with_db
@@ -30,17 +22,10 @@ def profile(db):
         if not file or file.filename == '':
             flash('No file selected.', 'danger')
             return redirect(url_for('profile.profile'))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
+        status,filename = upload_file(file)
+        if not status:
             flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
             return redirect(url_for('profile.profile'))
-        mime_type = magic.from_buffer(file.read(1024), mime=True)
-        file.seek(0)
-        if mime_type not in ALLOWED_MIME_TYPES:
-            flash('Invalid file content.', 'danger')
-            return redirect(url_for('profile.profile'))
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        file_path = UPLOAD_DIR / filename
-        file.save(file_path)
         cursor.execute("UPDATE users SET avatar = ? WHERE username = ?", (filename, username))
         db.commit()
         flash('Avatar uploaded successfully!', 'success')

@@ -111,19 +111,42 @@ We will create a helper decorator to manage the database connection efficiently.
 ```python
 from functools import wraps
 from flask import redirect, url_for, session, flash
+import magic
+from pathlib import Path
+from werkzeug.utils import secure_filename
+import uuid
+import sqlite3
 
+# Allowed extensions and MIME types
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
+
+# Upload folder
+UPLOAD_DIR = Path('./uploads/avatars')
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user' not in session:
-            flash('You must be logged in to access this page.', 'danger')
-            return redirect(url_for('auth.login'))
-        return f(*args, **kwargs)
-    return decorated_function
-  
-def allowed_file(filename,  ALLOWED_EXTENSIONS):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash('You must be logged in to access this page.', 'danger')
+            return redirect(url_for('auth.login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def upload_file(file):
+    if not allowed_file(file.filename):
+        return False,''
+    mime_type = magic.from_buffer(file.read(1024), mime=True)
+    file.seek(0)
+    if mime_type not in ALLOWED_MIME_TYPES:
+        return False,''
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    file_path = UPLOAD_DIR / filename
+    file.save(file_path)
+    return True,filename
 
 def with_db(f):
     @wraps(f)
@@ -135,6 +158,7 @@ def with_db(f):
         finally:
             db.close()
     return decorated_function
+
 ```
 The new decorator `with_db(f)` manages the connection to the database for any route that performs database operations.
 - It connects to the database using `sqlite3.connect("./database.db")`.
@@ -248,58 +272,44 @@ Just like we did with the `auth.py` routes, we’ve added the **`with_db`** deco
 Now, both the **`view_page`** and **`create_page`** routes interact directly with the database retrieving and storing page content persistently.   
 **`routes/profile.py`**
 ```python
-import uuid
-import magic
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory
-from werkzeug.utils import secure_filename
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory 
 from utils.forms import UploadForm
-from utils.funcs import login_required, allowed_file,with_db
+from utils.funcs import login_required, upload_file,with_db 
 from pathlib import Path
 
-profile_bp = Blueprint('profile', __name__)
 
+profile_bp = Blueprint('profile', __name__)
 UPLOAD_DIR = Path('./uploads/avatars')
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-# Allowed extensions and MIME types
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
 
 @profile_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 @with_db
 def profile(db):
-    form = UploadForm()
-    username = session['user']
-    cursor = db.cursor()
-    cursor.execute("SELECT avatar FROM users WHERE username = ?", (username,))
-    user = cursor.fetchone()
-    avatar_path = user["avatar"]
-    if request.method == 'POST' and form.validate_on_submit():
-        file = request.files.get('avatar')
-        if not file or file.filename == '':
-            flash('No file selected.', 'danger')
-            return redirect(url_for('profile.profile'))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
-            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
-            return redirect(url_for('profile.profile'))
-        mime_type = magic.from_buffer(file.read(1024), mime=True)
-        file.seek(0)
-        if mime_type not in ALLOWED_MIME_TYPES:
-            flash('Invalid file content.', 'danger')
-            return redirect(url_for('profile.profile'))
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        file_path = UPLOAD_DIR / filename
-        file.save(file_path)
-        cursor.execute("UPDATE users SET avatar = ? WHERE username = ?", (filename, username))
-        db.commit()
-        flash('Avatar uploaded successfully!', 'success')
-        return redirect(url_for('profile.profile'))
-    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
+    form = UploadForm()
+    username = session['user']
+    cursor = db.cursor()
+    cursor.execute("SELECT avatar FROM users WHERE username = ?", (username,))
+    user = cursor.fetchone()
+    avatar_path = user["avatar"]
+    if request.method == 'POST' and form.validate_on_submit():
+        file = request.files.get('avatar')
+        if not file or file.filename == '':
+            flash('No file selected.', 'danger')
+            return redirect(url_for('profile.profile'))
+        status,filename = upload_file(file)
+        if not status:
+            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
+            return redirect(url_for('profile.profile'))
+        cursor.execute("UPDATE users SET avatar = ? WHERE username = ?", (filename, username))
+        db.commit()
+        flash('Avatar uploaded successfully!', 'success')
+        return redirect(url_for('profile.profile'))
+    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
 
 @profile_bp.route('/avatars/<filename>')
 @login_required
 def get_avatar(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    return send_from_directory(UPLOAD_DIR, filename)
 ```
 ### Edit Templates
 All our other templates remain the same we only need to update the `wiki_page.html` file.  Since we no longer use the `page.html_content` attribute, we replace it with `page.content`.   
@@ -467,57 +477,41 @@ def logout():
 We start by importing the **`User`** class from `models.user`.    Whenever we need to create a new user, we now call **`User.create()`**, and when we need to retrieve a user, we use **`User.find_by_username()`**. By moving the SQL logic into the model, our route code becomes much cleaner and easier to maintain.    
 **`routes/profile.py`**
 ```python
-import uuid
-import magic
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory
-from werkzeug.utils import secure_filename
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory 
 from utils.forms import UploadForm
-from utils.funcs import login_required, allowed_file,with_db
-from pathlib import Path
+from utils.funcs import login_required, upload_file,with_db 
 from models.user import User
+from pathlib import Path
 
 profile_bp = Blueprint('profile', __name__)
-
 UPLOAD_DIR = Path('./uploads/avatars')
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# Allowed extensions and MIME types
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
 
 @profile_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 @with_db
 def profile(db):
-    form = UploadForm()
-    username = session['user']
-    user = User.find_by_username(db,username)
-    avatar_path = user["avatar"]
-    if request.method == 'POST' and form.validate_on_submit():
-        file = request.files.get('avatar')
-        if not file or file.filename == '':
-            flash('No file selected.', 'danger')
-            return redirect(url_for('profile.profile'))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
-            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
-            return redirect(url_for('profile.profile'))
-        mime_type = magic.from_buffer(file.read(1024), mime=True)
-        file.seek(0)
-        if mime_type not in ALLOWED_MIME_TYPES:
-            flash('Invalid file content.', 'danger')
-            return redirect(url_for('profile.profile'))
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        file_path = UPLOAD_DIR / filename
-        file.save(file_path)
-        User.update_avatar(db,filename,username)
-        flash('Avatar uploaded successfully!', 'success')
-        return redirect(url_for('profile.profile'))
-    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
+    form = UploadForm()
+    username = session['user']
+    user = User.find_by_username(db,username)
+    avatar_path = user["avatar"]
+    if request.method == 'POST' and form.validate_on_submit():
+        file = request.files.get('avatar')
+        if not file or file.filename == '':
+            flash('No file selected.', 'danger')
+            return redirect(url_for('profile.profile'))
+        status,filename = upload_file(file)
+        if not status:
+            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
+            return redirect(url_for('profile.profile'))
+        User.update_avatar(db,filename,username)
+        flash('Avatar uploaded successfully!', 'success')
+        return redirect(url_for('profile.profile'))
+    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
 
 @profile_bp.route('/avatars/<filename>')
 @login_required
 def get_avatar(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    return send_from_directory(UPLOAD_DIR, filename)
 ```
 Same as we did for ``auth.py``, Here we use **`User.find_by_username()`** here to retrieve user data. and to update the user’s avatar, we call **`User.update_avatar()`**, keeping all database operations neatly handled within the model and maintaining clean, organized route logic.
 **`routes/wiki.py`**
@@ -727,58 +721,43 @@ def logout():
 We removed the `with_db` decorator since **SQLAlchemy** now handles opening and closing database connections automatically. In the `register` and `login` routes, instead of manually executing SQL, we use `db.session.query(User).filter_by(...)` to find users and `db.session.add()` + `db.session.commit()` to create new ones. This makes our code cleaner, safer, and fully ORM-based.
 **`routes/profile.py`**
 ```python
-import uuid
-import magic
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory
-from werkzeug.utils import secure_filename
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory 
 from utils.forms import UploadForm
-from utils.funcs import login_required, allowed_file
-from pathlib import Path
+from utils.funcs import login_required, upload_file
 from models.user import User
+from pathlib import Path
 from models import db
 
-profile_bp = Blueprint('profile', __name__)  
+profile_bp = Blueprint('profile', __name__)
 
 UPLOAD_DIR = Path('./uploads/avatars')
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# Allowed extensions and MIME types
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
 
 @profile_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
-    form = UploadForm()
-    username = session['user']
-    user = db.session.query(User).filter_by(username=username).first()
-    avatar_path = user.avatar
-    if request.method == 'POST' and form.validate_on_submit():
-        file = request.files.get('avatar')
-        if not file or file.filename == '':
-            flash('No file selected.', 'danger')
-            return redirect(url_for('profile.profile'))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
-            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
-            return redirect(url_for('profile.profile'))
-        mime_type = magic.from_buffer(file.read(1024), mime=True)
-        file.seek(0)
-        if mime_type not in ALLOWED_MIME_TYPES:
-            flash('Invalid file content.', 'danger')
-            return redirect(url_for('profile.profile'))
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        file_path = UPLOAD_DIR / filename
-        file.save(file_path)
-        user.avatar = filename
-        db.session.commit()
-        flash('Avatar uploaded successfully!', 'success')
-        return redirect(url_for('profile.profile'))
-    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
+    form = UploadForm()
+    username = session['user']
+    user = db.session.query(User).filter_by(username=username).first()
+    avatar_path = user.avatar
+    if request.method == 'POST' and form.validate_on_submit():
+        file = request.files.get('avatar')
+        if not file or file.filename == '':
+            flash('No file selected.', 'danger')
+            return redirect(url_for('profile.profile'))
+        status,filename = upload_file(file)
+        if not status:
+            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
+            return redirect(url_for('profile.profile'))
+        user.avatar = filename
+        db.session.commit()
+        flash('Avatar uploaded successfully!', 'success')
+        return redirect(url_for('profile.profile'))
+    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
 
 @profile_bp.route('/avatars/<filename>')
 @login_required
 def get_avatar(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    return send_from_directory(UPLOAD_DIR, filename)
 ```
 Here too we removed the `with_db` decorator. To update the user, we now use and modify the `avatar` attribute directly, followed by `db.session.commit()` to save changes. 
 **`routes/wiki.py`**
