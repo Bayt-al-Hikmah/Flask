@@ -664,7 +664,16 @@ We’ll add a function to our `utils/funcs.py` file that helps us verify whether
 ```python
 from functools import wraps
 from flask import redirect, url_for, session, flash
+import magic
+from pathlib import Path
+from werkzeug.utils import secure_filename
+# Allowed extensions and MIME types
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
 
+# Upload folder
+UPLOAD_DIR = Path('./uploads/avatars')
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -674,29 +683,35 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def allowed_file(filename,  ALLOWED_EXTENSIONS):
+def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def upload_file(file):
+	if not allowed_file(file.filename):
+		return False,''
+    mime_type = magic.from_buffer(file.read(1024), mime=True)
+	file.seek(0)
+	if mime_type not in ALLOWED_MIME_TYPES:
+      return False,''
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    file_path = UPLOAD_DIR / filename
+    file.save(file_path)
+    return True,filename
+    
 ```
+We created two  helper  function 
+- allowed_file check if the file extension is on the ALLOWED_EXTENSIONS
+- upload_file use allowed_file to check the file extension and use magic to check file mime type if both check pass we generate filename, save it on our server and return True with File name if any check file we return False with empty string 
 ### Creating the Profile Route
 Now we’ll create a new route blueprint that handles displaying the user profile and uploading profile picture.  
 **`routes/profile.py`:**
 ```python
 import uuid
-import magic
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, abort
-from werkzeug.utils import secure_filename
 from utils.forms import UploadForm
-from utils.funcs import login_required, allowed_file
-from pathlib import Path
+from utils.funcs import login_required, upload_file
 
 profile_bp = Blueprint('profile', __name__)
-
-UPLOAD_DIR = Path('./uploads/avatars')
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# Allowed extensions and MIME types
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
 
 @profile_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -710,111 +725,30 @@ def profile():
         if not file or file.filename == '':
             flash('No file selected.', 'danger')
             return redirect(url_for('profile.profile'))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
+        status,filename = upload_file(file)
+        if not status:
             flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
             return redirect(url_for('profile.profile'))
-        mime_type = magic.from_buffer(file.read(1024), mime=True)
-        file.seek(0)
-        if mime_type not in ALLOWED_MIME_TYPES:
-            flash('Invalid file content.', 'danger')
-            return redirect(url_for('profile.profile'))
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        file_path = UPLOAD_DIR / filename
-        file.save(file_path)
         user['avatar'] = filename
-        current_app.users[username] = user
+		current_app.users[username] = user
         flash('Avatar uploaded successfully!', 'success')
         return redirect(url_for('profile.profile'))
     return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
 ```
-**GET /profile**  
-When the user visits the `/profile` page in their browser:
-1. **Authentication check (`@login_required`)**
-    - The `login_required` decorator ensures that only logged-in users can access the profile page.
-    - If a user is not authenticated, they are redirected to the login page.
-2. **User data retrieval**
-    - The app retrieves the currently logged-in username from the session (`session['user']`).
-    - It then loads that user’s record from `current_app.users`, a simulated in-memory storage (like a database).
-    - If the user has previously uploaded an avatar, its filename is fetched and stored in `avatar_path`.
-3. **Form rendering**
-    - A new instance of `UploadForm` (containing a `FileField` named `avatar`) is created.
-    - The `profile.html` template is rendered, showing the upload form and the user’s current avatar if one exists.
+When the `/profile` get request, the @login_required check if the user is logged in or no,if he is logged in request continue else it will get redirected to login page, After the request pass the decorator, we retrice the logged-in username from the session (`session['user']`), then we loading the user record from `current_app.users` and we fetch the avatar, After that we have to path.   
+If the request is Get or the form isn't valid we rendring the profile.html template.   
+If the reques it Post and the Form is valid, we extract the file from the form, we check if it submitted  we use upload_file to check the file and upload it to our server and finally we edit the user avatar inside our memory with `user['avatar'] = filename` and  `current_app.users[username] = user`then we redirect the user to ``/profile`` with a succeed message, if the workflow fail we redirect ser to `/profile` with error message.
 
-**POST /profile**  
-When the form is submitted (i.e., when the user uploads a new file):
-1. **Form validation**
-    - The route first checks if the form is valid using `form.validate_on_submit()`.
-    - Then it ensures that the uploaded file actually exists (`if not file or file.filename == ''`).
-2. **Extension validation (`allowed_file`)**
-    - The `allowed_file()` function from `utils/funcs.py` checks whether the file’s extension (like `.png` or `.jpg`) is in the allowed set (`ALLOWED_EXTENSIONS`).
-    - This prevents users from uploading disallowed file types such as `.exe`, `.php`, or `.js`.
-3. **MIME type verification with `python-magic`**
-    - The first 1024 bytes of the file are read and analyzed by `python-magic` to determine the true MIME type.
-    - The `file.seek(0)` command resets the file’s pointer so it can be saved later.
-    - This prevents malicious uploads where attackers rename harmful files (e.g., `malware.exe` → `cat.png`) to bypass extension checks.
-    - Only files whose MIME type matches one of `image/png`, `image/jpeg`, or `image/gif` are accepted.
-4. **Filename sanitization and uniqueness**
-    - The `secure_filename()` function from Werkzeug ensures that the filename contains only safe characters (no `../` or system paths).
-    - A **UUID (Universally Unique Identifier)** is prepended to the filename to avoid collisions between users uploading files with the same name.`filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"`, it generated random id to add to the file name when we store it
-5. **File storage**
-    - The file is saved to a secure directory (`/uploads`) using: `file.save(file_path)`
-    - This directory is created (if it doesn’t exist) with `UPLOAD_DIR.mkdir(parents=True, exist_ok=True)`.
-    - The upload directory is kept outside the main app’s static or templates folder to prevent direct web access to uploaded files.
-6. **User data update**
-    - The filename of the uploaded image is stored in the user’s record (`user['avatar']`).
-    - The in-memory user data (`current_app.users`) is updated accordingly.
-7. **Feedback and redirect**
-    - A success message is flashed to the user:`flash('Avatar uploaded successfully!', 'success')`
-    - The user is then redirected back to the `/profile` page to see their updated avatar.
 ### Serving Uploaded Files Safely
 To serve uploaded files securely, we’ll add another route inside `routes/profile.py`:
 ```python
-import uuid
-import magic
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, send_from_directory 
-from werkzeug.utils import secure_filename
-from utils.forms import UploadForm
-from utils.funcs import login_required, allowed_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, send_from_directory # we add send_from_directory to the import
 from pathlib import Path
 
-profile_bp = Blueprint('profile', __name__)
-
+# We add this
 UPLOAD_DIR = Path('./uploads/avatars')
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Allowed extensions and MIME types
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIME_TYPES = {'image/png', 'image/jpeg', 'image/gif'}
-
-@profile_bp.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile():
-    form = UploadForm()
-    username = session['user']
-    user = current_app.users.get(username, {})
-    avatar_path = user.get('avatar', None)
-    if request.method == 'POST' and form.validate_on_submit():
-        file = request.files.get('avatar')
-        if not file or file.filename == '':
-            flash('No file selected.', 'danger')
-            return redirect(url_for('profile.profile'))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS):
-            flash('Only image files are allowed (.png, .jpg, .jpeg, .gif).', 'danger')
-            return redirect(url_for('profile.profile'))
-        mime_type = magic.from_buffer(file.read(1024), mime=True)
-        file.seek(0)
-        if mime_type not in ALLOWED_MIME_TYPES:
-            flash('Invalid file content.', 'danger')
-            return redirect(url_for('profile.profile'))
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        file_path = UPLOAD_DIR / filename
-        file.save(file_path)
-        user['avatar'] = filename
-        current_app.users[username] = user
-        flash('Avatar uploaded successfully!', 'success')
-        return redirect(url_for('profile.profile'))
-    return render_template('profile.html', form=form, user=user, avatar_path=avatar_path)
-
+# We add after the profile route
 @profile_bp.route('/avatars/<filename>')
 @login_required
 def get_avatar(filename):
