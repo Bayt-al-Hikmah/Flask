@@ -1,5 +1,5 @@
-from utils.forms import ContactForm
-from flask import Blueprint,redirect,render_template,url_for
+from forms.contactForm import ContactForm
+from flask import Blueprint,render_template
 
 contact_bp = Blueprint('contact', __name__)
 @contact_bp.route('/contact', methods=['GET', 'POST'])

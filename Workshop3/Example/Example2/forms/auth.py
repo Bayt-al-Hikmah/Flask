@@ -1,4 +1,4 @@
-from wtforms import StringField, PasswordField, validators, TextAreaField
+from wtforms import StringField, PasswordField, validators
 from flask_wtf import FlaskForm
 
 class RegistrationForm(FlaskForm):
@@ -8,7 +8,3 @@ class RegistrationForm(FlaskForm):
 class LoginForm(FlaskForm):
     username = StringField('Username', [validators.DataRequired()])
     password = PasswordField('Password', [validators.DataRequired()])
-
-class PageForm(FlaskForm):
-    title = StringField('Title', [validators.DataRequired()])
-    content = TextAreaField('Content', [validators.DataRequired()])

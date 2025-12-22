@@ -16,9 +16,9 @@ Essentially, if the front-end is the part of the restaurant where we sit and eat
 
 ![Image](structure.jpg)
 ## Introduction to Flask
-Flask is a **microframework** for web development in Python. But what does "microframework" mean?
-- **Framework**: It provides us with a set of tools and a structure to build web applications without having to start from scratch. It handles the low-level details of web communication (like processing HTTP requests) so we can focus on our application's logic.
-- **Micro**: This means Flask is lightweight and provides only the essential components for building a web application. It doesn't force us into a specific way of doing things or include tools we might not need (like a database layer or a form validation library). It's simple, flexible, and easy to learn.
+Flask is a microframework for web development in Python. But what does "microframework" mean?
+- Framework: It provides us with a set of tools and a structure to build web applications without having to start from scratch. It handles the low-level details of web communication (like processing HTTP requests) so we can focus on our application's logic.
+- Micro: This means Flask is lightweight and provides only the essential components for building a web application. It doesn't force us into a specific way of doing things or include tools we might not need (like a database layer or a form validation library). It's simple, flexible, and easy to learn.
 
 We choose Flask when we want to start small, move fast, and have the freedom to select our own tools and libraries as our application grows.
 ### The Blueprint-Based Architecture in Flask
@@ -42,8 +42,6 @@ Popular extensions include:
     
 
 This approach allows Flask to remain minimal at its core but powerful when extended. 
-
-
 #### Request Lifecycle
 Flask provides **request hooks** (`before_request`, `after_request`, `teardown_request`) that allow blueprints or extensions to interact with the request-response lifecycle.  
 These hooks make it easy to add custom logic such as logging, authentication checks, or request preprocessing.  
@@ -90,9 +88,9 @@ Now, with our environment active, we can install Flask using `pip`, Python's pac
 pip install Flask
 ```
 ### Creating the "Hello, World!" App
-Now that Flask is installed, let’s build our very first application. This simple example will demonstrate the basic structure of a Flask app and show how we can serve a response from the server to a web browser.  
-The first step is to create a new file in your project directory called `app.py`. This file will contain the main logic of our application.  
-Open it in your code editor and add the following code:  
+Now that Flask is installed, let’s build our very first application.    
+The first step is to create a new file in your project directory called `app.py`. This file will contain the main logic of our application.    
+Open it in your code editor and add the following code:   
 **`app.py`**
 ```python
 from flask import Flask
@@ -106,11 +104,11 @@ def home_page():
 if __name__ == '__main__':
     app.run(port=3000, debug=True)
 ```
-In Flask, everything begins with the `Flask` class, which serves as the foundation of any web application. We start by importing it from the `flask` package and then creating an instance of it: `app = Flask(__name__)`. This `app` object represents our web application, and it’s responsible for handling requests, managing routes, and returning responses. The argument `__name__` is a special Python variable that holds the name of the current module. Flask uses it to determine the location of the application so it can correctly find resources such as templates and static files.
+The `Flask` class serves as the foundation of our web application. We start by importing it from the `flask` package and then creating an instance of it: `app = Flask(__name__)`. This `app` object represents our web application, and it’s responsible for handling requests, managing routes, and returning responses. The argument `__name__` is a special Python variable that holds the name of the current module. Flask uses it to determine the location of the application so it can correctly find resources such as templates and static files.
 
-After initializing the app, we define how it should respond to web requests by using the `@app.route('/')` decorator. A decorator in Python modifies the behavior of a function in this case, it tells Flask that when a user visits a specific URL (known as a **route**), the associated function should run. The argument `'/'` represents the root path of the website, which is what users reach when they visit your site’s homepage. When someone visits this route, Flask executes the `home_page()` function and sends back its return value—here, the text `"Hello, World!"`—as the response displayed in the browser.
+After initializing the app, we define how it should respond to web requests by using the `@app.route('/')` decorator, it tells Flask that when a user visits a specific URL (known as a route), the associated function should run. The argument `'/'` represents the root path of the website. When someone visits this route, Flask executes the `home_page()` function and sends back the text `"Hello, World!"` as the response.
 
-At the bottom, the `if __name__ == '__main__':` condition acts as a safeguard. It ensures that the web server starts only when this script is run directly, not when it’s imported as a module into another Python file. This is important because importing should not unintentionally start the server. Inside that block, `app.run(port=3000, debug=True)` launches the Flask development server, making your app accessible locally through `http://localhost:3000`. The `debug=True` argument enables helpful developer features, it automatically reloads the server whenever we make code changes and provides detailed error messages if something goes wrong.  
+At the bottom, the `if __name__ == '__main__':` condition acts as a safeguard. It ensures that the web server starts only when this script is run directly, not when it’s imported as a module into another Python file. Inside that block, `app.run(port=3000, debug=True)` launches the Flask development server, making the app accessible locally through `http://localhost:3000`. The `debug=True` argument automatically reloads the server whenever we make code changes and it provides detailed error messages if something goes wrong.  
 Now we run our application using
 ```shell
 python app.py
@@ -135,7 +133,7 @@ def greet_user(username):
 if __name__ == '__main__':
     app.run(port=3000, debug=True)
 ```
-Here, the route `'/user/<username>'` defines a **variable section** in the URL using angle brackets (`< >`). The placeholder `<username>` tells Flask to capture whatever value appears in that part of the URL and pass it as an argument to the function `greet_user()`. For example, if a user visits `http://localhost:3000/user/alice`, Flask matches this route pattern and automatically extracts the word `alice` from the URL. It then calls the function as if we had written `greet_user("alice")`.
+Here, the route `'/user/<username>'` defines a variable section in the URL using angle brackets (`< >`). The placeholder `<username>` tells Flask to capture whatever value appears in that part of the URL and pass it as an argument to the function `greet_user()`. For example, if a user visits `http://localhost:3000/user/alice`, Flask matches this route pattern and automatically extracts the word `alice` from the URL. It then calls the function as if we had written `greet_user("alice")`.
 
 Inside the function, we can use this captured value just like a regular variable. In this case, `username` holds the value `"alice"`, and the function returns a personalized message: `"Hello, alice"`. 
 ### URL Query Arguments
@@ -159,7 +157,7 @@ def greet_user():
 if __name__ == '__main__':
     app.run(port=3000, debug=True)
 ```
-Here the route `/search` defines a fixed endpoint, meaning the URL path itself doesn’t change instead, the information is passed through query parameters. Flask provides the `request` object to access data sent by the client, and `request.args` specifically handles query parameters from the URL.
+Here the route `/search` defines a fixed endpoint. the information is passed through query parameters.  
 
 When a user visits a URL like `http://localhost:3000/search?query=flask`, the part after the question mark (`?query=flask`) is a query string. Flask reads this and stores it in `request.args`, which behaves like a dictionary. By calling `request.args.get('query')`, we retrieve the value associated with the key `'query'`, in this case, `"flask"`.
 
@@ -168,13 +166,13 @@ The code then checks if a query parameter was provided. If it exists, the app re
 We can also include multiple query parameters in a single URL by separating them with an ampersand (`&`). For example, visiting    `http://localhost:3000/search?query=flask&sort=recent&page=2`  
 sends three parameters (`query`, `sort`, and `page`) that can all be accessed individually using `request.args.get('query')`, `request.args.get('sort')`, and `request.args.get('page')`.
 ## Building a Simple JSON API
-Now, let's combine everything we've learned to build a simple API that returns a JSON object. APIs are how modern applications communicate. Instead of returning text, we will return data that another application (like a mobile app or a JavaScript front-end) can easily use.  
+Now, let's combine everything we've learned to build a simple API that returns a JSON object. APIs are how modern applications communicate. Instead of returning text, we will return data that another application can easily use.  
 Our goal is to create an endpoint that:
 1. Accepts a product `id` as a URL parameter.
 2. Accepts an optional `currency` as a query argument.
 3. Returns a JSON object with the product details.
 
-First, we add `jsonify` to our imports. This is a Flask function that correctly formats our Python dictionaries into JSON responses.
+To return JSON Pbject we need to use `jsonify`, we add it to our imports.
 ```python
 from flask import Flask, request, jsonify
 products_db = {

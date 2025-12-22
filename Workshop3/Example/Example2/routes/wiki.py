@@ -1,6 +1,6 @@
 import markdown
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, abort
-from utils.forms import PageForm
+from forms.pageForm import PageForm
 from utils.funcs import login_required
 
 wiki_bp = Blueprint('wiki', __name__)

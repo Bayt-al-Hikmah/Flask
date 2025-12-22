@@ -1,11 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
-from utils.forms import RegistrationForm, LoginForm
+from Workshop3.Example.Example1.forms.auth import RegistrationForm, LoginForm
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm(request.form)
-    if request.method == 'POST' and form.validate():
+    if form.validate():
         username = form.username.data
         password = form.password.data
 
@@ -23,7 +23,7 @@ def register():
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm(request.form)
-    if request.method == 'POST' and form.validate():
+    if form.validate():
         username = form.username.data
         password = form.password.data
         user = current_app.users.get(username)
