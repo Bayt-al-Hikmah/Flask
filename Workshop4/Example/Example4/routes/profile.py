@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory 
-from utils.forms import UploadForm
+from forms.upload import UploadForm
 from utils.funcs import login_required, upload_file
 from models.user import User
 from pathlib import Path

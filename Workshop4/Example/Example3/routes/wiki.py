@@ -1,7 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from utils.forms import PageForm
-from utils.funcs import login_required
-from utils.funcs import with_db
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from forms.pageForm import PageForm
+from utils.funcs import login_required, with_db
 from models.page import Page
 wiki_bp = Blueprint('wiki', __name__)
 

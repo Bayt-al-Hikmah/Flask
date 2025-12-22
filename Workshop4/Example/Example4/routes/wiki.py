@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from utils.forms import PageForm
+from forms.pageForm import PageForm
 from utils.funcs import login_required
 from models.page import Page
 from models.user import User

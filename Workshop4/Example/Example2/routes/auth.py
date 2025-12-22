@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from utils.forms import RegistrationForm, LoginForm
+from forms.auth import RegistrationForm, LoginForm
 from argon2 import PasswordHasher
 from utils.funcs import with_db
 
