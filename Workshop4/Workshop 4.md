@@ -539,7 +539,7 @@ We removed the `with_db` decorator since SQLAlchemy now handles opening and clos
 **`routes/auth.py`**
 ```python
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from utils.forms import RegistrationForm, LoginForm
+from forms.auth import RegistrationForm, LoginForm
 from argon2 import PasswordHasher
 from models.user import User
 from models import db
@@ -592,7 +592,7 @@ Same for ``profile`` route we remove the `with_db` decorator. To update the user
 **`routes/profile.py`**
 ```python
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session,  send_from_directory 
-from utils.forms import UploadForm
+from forms.upload import UploadForm
 from utils.funcs import login_required, upload_file
 from models.user import User
 from pathlib import Path
@@ -633,7 +633,7 @@ Finally, we updated our wiki route, In `view_page`, we fetch the page with `db.s
 **`routes/wiki.py`**
 ```python
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from utils.forms import PageForm
+from forms.pageForm import PageForm
 from utils.funcs import login_required
 from models.page import Page
 from models.user import User
