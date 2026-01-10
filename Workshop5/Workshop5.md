@@ -763,5 +763,18 @@ class TaskListResource(Resource):
         pass
 ```
 Rate limiting ensures our API remains responsive and stable, providing a layer of security and robustness as our application scales.
+### Query Parameters and Pagination
+#### Query Parameters
+Somtimes we want to apply filters for our data, for example, make user able to search task by name, for that we can use the query parameters, we can access them inside our views by using ``request.args.get('name')`` where name is the name of the parameter we want to access.
+```
+/api/tasks?name=meeting
+```
+#### Pagination
+Pagination is the process of dividing data into chunks instead of returning all records at once, This improves performance and makes APIs easier to consume, For example, instead of returning all tasks, we return 10 tasks per request, and the client can load more by navigating between pages.
+In Flask, we apply pagination using the ``limit()`` and ``offset()`` methods provided by the model query. The client sends the pagination values using query parameters, and we retrieve them using ``request.args.get()``. These values are then passed to the model query.
+```python
+limit = request.args.get('limit', default=10, type=int)
+offset = request.args.get('offset', default=0, type=int)
 
-
+Task.query.limit(limit).offset(offset).filter_by(user_id=current_user_id).all()
+```
