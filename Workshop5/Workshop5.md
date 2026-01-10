@@ -770,7 +770,7 @@ Somtimes we want to apply filters for our data, for example, make user able to s
 /api/tasks?name=meeting
 ```
 #### Pagination
-Pagination is the process of dividing data into chunks instead of returning all records at once, This improves performance and makes APIs easier to consume, For example, instead of returning all tasks, we return 10 tasks per request, and the client can load more by navigating between pages.
+Pagination is the process of dividing data into chunks instead of returning all records at once, This improves performance and makes APIs easier to consume, For example, instead of returning all tasks, we return 10 tasks per request, and the client can load more by navigating between pages.    
 In Flask, we apply pagination using the ``limit()`` and ``offset()`` methods provided by the model query. The client sends the pagination values using query parameters, and we retrieve them using ``request.args.get()``. These values are then passed to the model query.
 ```python
 limit = request.args.get('limit', default=10, type=int)
